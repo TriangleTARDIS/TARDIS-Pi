@@ -1,0 +1,111 @@
+#!/usr/bin/python
+#
+# TARDIS SFX module.
+#
+# Copyright (C) 2017 Michael Thompson.  All Rights Reserved.
+#
+# Created 06-22-107 by Michael Thompson(triangletardis@gmail.com)
+# Last modified 07-04-2017
+#
+# Version 0.0.2
+#
+
+
+from __future__ import division
+import RPi.GPIO as GPIO
+import time
+import os
+import wave
+import contextlib
+from evdev import InputDevice, categorize, ecodes,  events
+
+
+def dimmer(l):
+   levels = [15, 7, 6, 5, 4, 11, 10, 12, 13, 9, 8, 3, 2, 1, 14, 0]
+   #levels = [15, 7, 6, 5, 4, 11, 10, 9, 8, 3, 2, 1, 0]
+   n = int(round((float(l)/100) * (len(levels) - 1), 0))
+   i = levels[n]
+   print "N:", n, " I:", i
+   GPIO.output((29, 31, 33, 35), (i & 1==1, i & 2 ==2, i & 4 == 4, i & 8 == 8))
+
+
+
+def demat(f):
+   print("Pulse " + f)
+    
+   with contextlib.closing(wave.open(f, "r")) as w: 
+      len = w.getnframes() / float(w.getframerate())
+  
+   print(len)
+   
+   #Play
+   c = "aplay -N %s &" % (f)
+   print(c)
+   os.system(c)
+    
+   #Flash
+   p = GPIO.PWM(11, 200)
+   p.start(0)
+
+   try:
+      fs = 0.009
+      r = int(len / (fs * 200))
+      print("T: %d") % (r)
+     
+      for i  in range(0,  r):
+         for i in range(100):
+            p.ChangeDutyCycle(100 - i)
+            dimmer(100 - i)
+            time.sleep(fs)
+
+         for i in range(100):
+            p.ChangeDutyCycle(i)
+            dimmer(i)
+            time.sleep(fs)
+
+   except Exception as e:
+       print("Failed")
+       print(e)
+       pass
+   
+   dimmer(0)     
+   p.stop()
+
+
+#
+#Main
+#
+print("Go...")
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(11, GPIO.OUT)
+GPIO.output(11, False)
+
+GPIO.setup(29, GPIO.OUT)
+GPIO.setup(31, GPIO.OUT)
+GPIO.setup(33, GPIO.OUT)
+GPIO.setup(35, GPIO.OUT)
+GPIO.output((29, 31, 33, 35), (False, False, False, False))
+time.sleep(1)
+
+print("Joystick Go...")
+gp = InputDevice('/dev/input/event1')
+print(gp)
+
+for event in gp.read_loop():
+    if event.type == ecodes.EV_KEY:
+        keyevent = categorize(event)
+        print(keyevent)
+        
+        if keyevent.keystate == events.KeyEvent.key_down:
+            print ("ACTION")
+            print (keyevent.keycode[0])
+            if keyevent.keycode[0] == "BTN_B":
+               demat("sound/Cloistr.wav")
+            elif keyevent.keycode[0] == "BTN_A":
+               demat("sound/Hightard.wav")
+            elif keyevent.keycode[0] == "BTN_LEFT":
+               demat("sound/Hightard.wav")
+            elif keyevent.keycode[0] == "K":
+               demat("sound/Hightard.wav")
+
+GPIO.cleanup()
