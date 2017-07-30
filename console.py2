@@ -1,0 +1,217 @@
+#!/usr/bin/python
+#
+# TARDIS SFX module.
+#
+# Copyright (C) 2017 Michael Thompson.  All Rights Reserved.
+#
+# Created 06-22-107 by Michael Thompson(triangletardis@gmail.com)
+# Last modified 07-29-2017
+#
+# Version 0.0.6
+#
+
+
+from __future__ import division
+import os
+import signal
+import sys
+import time
+import RPi.GPIO as GPIO
+import wave
+import contextlib
+import evdev
+
+
+# Globals
+devName = "Compx 2.4G Receiver"
+dirSound = "sound/"
+pwmHz = 400
+pwmSleepDefault = 0.010
+debug = False
+gpioPin = 11
+
+
+#
+# Print a string to the console.
+#
+def conPrint(s):
+   print("... \033[94m" + s + "\033[0m")
+
+
+#
+# Print a debug string to the console.
+#
+def debugPrint(s):
+   if (debug):
+      print("> \033[31;5m" + s + "\033[0m")
+
+
+#
+# Get length of a wave file.
+#
+def lenSound(f):
+   debugPrint("Sound: " + f)
+   with contextlib.closing(wave.open(dirSound + f, "r")) as w: 
+      len = w.getnframes() / float(w.getframerate())
+  
+   debugPrint(" -- " + str(len) + " Seconds") 
+   return len
+
+
+#
+# Play a wave file.
+#
+def playSound(f, secs=0, blk=False):
+   debugPrint("Play: " + f)
+   c = "aplay -q -N "
+
+   if secs ==0:
+      c = c + (dirSound + f)
+   else:
+      c = c + "-d %s %s" % (secs, dirSound + f)
+
+   if not blk:
+      c = c + " &"
+
+   debugPrint(c)
+   os.system(c)
+
+
+#
+# Pulse Lights / Dematerialise effect.
+#
+def effectPulse(f, pwmSleep=pwmSleepDefault):
+   conPrint("Pulse: " + f)
+   len = lenSound(f)
+   playSound(f)
+    
+   p = GPIO.PWM(gpioPin, pwmHz)
+   p.start(100)
+
+   try:
+      r = int(len / (pwmSleep * 100 * 2))
+      debugPrint("T: " + str(r))
+     
+      for i  in range(0,  r):
+         for i in range(100):
+            p.ChangeDutyCycle(100 - i)
+            time.sleep(pwmSleep)
+
+         for i in range(100):
+            p.ChangeDutyCycle(i)
+            time.sleep(pwmSleep)
+
+   except Exception as e:
+       print("Failed")
+       print(e)
+       pass
+   
+   conPrint("All Stop")
+   p.stop()
+   GPIO.setup(gpioPin, GPIO.OUT)
+   GPIO.output(gpioPin, True)
+
+
+#
+# Blink Lights / Door Lock effect.
+#
+def effectBlink(f):
+   conPrint("Lock: " + f)
+   len = lenSound(f)
+   playSound(f)
+    
+   p = GPIO.PWM(gpioPin, pwmHz)
+   p.start(100)
+
+   try:
+      levels = [100, 0, 25, 100, 0, 25, 100]
+      for l in levels:
+         debugPrint("Level: " + str(l))
+         p.ChangeDutyCycle(l)
+         time.sleep(0.1)
+
+   except Exception as e:
+       print("Failed")
+       print(e)
+       pass
+   
+   conPrint("Locked")
+   p.stop()
+   GPIO.setup(gpioPin, GPIO.OUT)
+   GPIO.output(gpioPin, True)
+
+
+#
+# Signal Handler.
+#
+def sig_handler(signal, frame):
+   conPrint("Emergency Exit")
+   GPIO.output(gpioPin, False)
+   GPIO.cleanup()
+   sys.exit(1)
+
+
+#
+# Main
+#
+os.system("./console_init.sh")
+conPrint("*****")
+conPrint("Console Enabled")
+
+#Init GPIO
+signal.signal(signal.SIGINT, sig_handler)
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(gpioPin, GPIO.OUT)
+GPIO.output(gpioPin, True)
+
+conPrint("Locate Registered Operator")
+playSound("runaway_scanning.wav", 5, True)
+devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
+gp = None
+for device in devices:
+   if (device.name == devName):
+      gp = evdev.InputDevice(device.fn)
+      conPrint("Found Operator!")
+      break
+
+if gp is None:
+   conPrint("Operator Missing!")
+else:
+   for event in gp.read_loop():
+      if event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL:
+         kCode = ""
+         keyevent = evdev.categorize(event)
+         ranEvent = False
+
+         if event.type == evdev.ecodes.EV_KEY and keyevent.keystate == evdev.events.KeyEvent.key_down:
+            kCode = keyevent.keycode[0] if type(keyevent.keycode) is list else keyevent.keycode
+            debugPrint("KEY: " + kCode)
+         elif event.code == evdev.ecodes.REL_WHEEL:
+            kCode = "UP" if event.value == 1 else "DOWN"
+            debugPrint("KEY: " + kCode)
+
+         if kCode == "BTN_MIDDLE":
+            effectPulse("cloister_bell.wav", pwmSleepDefault * 2)
+            ranEvent = True
+         elif kCode == "BTN_LEFT":
+            effectPulse("takeoff.wav")
+            ranEvent = True
+         elif kCode == "BTN_RIGHT":
+            effectBlink("lock_chirp.wav")
+            ranEvent = True
+         elif kCode == "UP":
+            effectPulse("exterior_telephone.wav", pwmSleepDefault * 5)
+            ranEvent = True
+         elif kCode == "DOWN":
+            effectPulse("denied_takeoff.wav", pwmSleepDefault * 1.5)
+            ranEvent = True
+
+         if ranEvent:
+            time.sleep(1)
+            GPIO.setup(gpioPin, GPIO.OUT)
+            GPIO.output(gpioPin, True)
+
+# Finish
+GPIO.cleanup()
+conPrint("Safe Exit")
