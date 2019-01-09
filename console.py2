@@ -2,12 +2,14 @@
 #
 # TARDIS SFX module.
 #
-# Copyright (C) 2017 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2018 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-107 by Michael Thompson(triangletardis@gmail.com)
 # Last modified 07-29-2017
+# Last modified 02-02-2018
+# Last modified 01-09-2019
 #
-# Version 0.0.6
+# Version 3.0.1
 #
 
 
@@ -65,7 +67,7 @@ def playSound(f, secs=0, blk=False):
    debugPrint("Play: " + f)
    c = "aplay -q -N "
 
-   if secs ==0:
+   if secs ==0 :
       c = c + (dirSound + f)
    else:
       c = c + "-d %s %s" % (secs, dirSound + f)
@@ -192,7 +194,7 @@ else:
             debugPrint("KEY: " + kCode)
 
          if kCode == "BTN_MIDDLE":
-            effectPulse("cloister_bell.wav", pwmSleepDefault * 2)
+            effectPulse("exterior_telephone.wav", pwmSleepDefault * 5)
             ranEvent = True
          elif kCode == "BTN_LEFT":
             effectPulse("takeoff.wav")
@@ -201,14 +203,15 @@ else:
             effectBlink("lock_chirp.wav")
             ranEvent = True
          elif kCode == "UP":
-            effectPulse("exterior_telephone.wav", pwmSleepDefault * 5)
+            effectPulse("cloister_bell.wav", pwmSleepDefault * 2)
             ranEvent = True
          elif kCode == "DOWN":
             effectPulse("denied_takeoff.wav", pwmSleepDefault * 1.5)
             ranEvent = True
 
          if ranEvent:
-            time.sleep(1)
+            while gp.read_one() != None:
+               pass
             GPIO.setup(gpioPin, GPIO.OUT)
             GPIO.output(gpioPin, True)
 
