@@ -17,22 +17,37 @@ echo ">>> TT Type 40, Mark 3 <<<"
 echo ...
 echo ... Online
 
+pulseaudio -k
+
 # Output to Headphone, Adjust Mixer
 #alsamixer
-amixer -q cset numid=3
-amixer -q set PCM 100%
+#amixer -q cset numid=3
+#amixer -q set PCM 100%
 echo ... Audio Interface Activated
 
 # Startup sound
 aplay -d 5 -q -N sound/door_open_close.wav
 speaker-test -W ./sound -t wav -w hum_mono.wav -l 0 > /dev/null &
 
+#pulseaudio --start
+
 # Activate Bluetooth
-bluetoothctl << EOF
-power on
-exit
-EOF
+#bluetoothctl << EOF
+#power off
+#power on
+#connect FF:FF:DE:AD:BE:EF
+#trust FF:FF:DE:AD:BE:EF
+#devices
+#agent on
+#exit
+#EOF
 echo ... Communications Activated
+
+pulseaudio --start 
+
+# Startup sound
+aplay -d 5 -q -N sound/door_open_close.wav
+speaker-test -W ./sound -t wav -w hum_mono.wav -l 0 > /dev/null &
 
 # Activate Lights
 raspi-gpio set 17 op

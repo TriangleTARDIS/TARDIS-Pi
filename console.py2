@@ -14,6 +14,7 @@
 
 
 from __future__ import division
+import sys
 import os
 import signal
 import sys
@@ -22,14 +23,17 @@ import RPi.GPIO as GPIO
 import wave
 import contextlib
 import evdev
+import random
 
 
 # Globals
-devName = "Compx 2.4G Receiver"
+#devName = "Compx 2.4G Receiver"
+devName = "Logitech USB Receiver"
 dirSound = "sound/"
-pwmHz = 400
+pwmHz = 600
 pwmSleepDefault = 0.010
-debug = False
+debug = True
+autoPilot = False
 gpioPin = 11
 
 
@@ -156,6 +160,7 @@ def sig_handler(signal, frame):
 #
 # Main
 #
+autoPilot = len(sys.argv) > 1
 os.system("./console_init.sh")
 conPrint("*****")
 conPrint("Console Enabled")
@@ -167,20 +172,26 @@ GPIO.setmode(GPIO.BOARD)
 GPIO.setup(gpioPin, GPIO.OUT)
 GPIO.output(gpioPin, True)
 
-conPrint("Locate Registered Operator")
-playSound("runaway_scanning.wav", 5, True)
-devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
-gp = None
-for device in devices:
-   if (device.name == devName):
-      gp = evdev.InputDevice(device.fn)
-      conPrint("Found Operator!")
-      break
+if autoPilot:
+   conPrint("Auto Pilot")
+else:
+   conPrint("Locate Registered Operator")
+   playSound("runaway_scanning.wav", 5, True)
+   devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
+   gp = None
 
-if gp is None:
+   for device in devices:
+      conPrint("Device: " + device.name)
+
+      if (device.name == devName):
+         gp = evdev.InputDevice(device.fn)
+         conPrint("Found Operator!")
+         break
+
+if not autoPilot and (gp is None):
    conPrint("Operator Missing!")
 else:
-   for event in gp.read_loop():
+    for event in gp.read_loop():
       if event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL:
          kCode = ""
          keyevent = evdev.categorize(event)
@@ -191,6 +202,11 @@ else:
             debugPrint("KEY: " + kCode)
          elif event.code == evdev.ecodes.REL_WHEEL:
             kCode = "UP" if event.value == 1 else "DOWN"
+            debugPrint("KEY: " + kCode)
+         
+         if autoPilot:
+            foo = ['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN']
+            kCode = random.choice(foo)
             debugPrint("KEY: " + kCode)
 
          if kCode == "BTN_MIDDLE":
@@ -212,9 +228,19 @@ else:
          if ranEvent:
             while gp.read_one() != None:
                pass
-            GPIO.setup(gpioPin, GPIO.OUT)
-            GPIO.output(gpioPin, True)
+
+         GPIO.setup(gpioPin, GPIO.OUT)
+         GPIO.output(gpioPin, True)
+
+         if autoPilot:
+            r = random.randint(1,5) * 1000
+            r = r + 5000
+            conPrint("Wait: " + str(r))
+            time.sleep(r)
+
 
 # Finish
+GPIO.setup(gpioPin, GPIO.OUT)
+GPIO.output(gpioPin, False)
 GPIO.cleanup()
 conPrint("Safe Exit")
