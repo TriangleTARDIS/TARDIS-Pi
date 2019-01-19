@@ -2,12 +2,12 @@
 #
 # TARDIS SFX module.  Init Script.
 #
-# Copyright (C) 2017 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2019 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-107 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 07-12-2017
+# Last modified 01-19-2019
 #
-# Version 0.0.4
+# Version 3.0.2
 #
 
 clear
@@ -17,39 +17,23 @@ echo ">>> TT Type 40, Mark 3 <<<"
 echo ...
 echo ... Online
 
-pulseaudio -k
-
 # Output to Headphone, Adjust Mixer
-#alsamixer
-#amixer -q cset numid=3
-#amixer -q set PCM 100%
+amixer -q cset numid=3
+amixer -q set PCM 100%
+amixer -q set Master 100%
 echo ... Audio Interface Activated
 
-# Startup sound
-aplay -d 5 -q -N sound/door_open_close.wav
-speaker-test -W ./sound -t wav -w hum_mono.wav -l 0 > /dev/null &
-
-#pulseaudio --start
-
-# Activate Bluetooth
-#bluetoothctl << EOF
-#power off
-#power on
-#connect FF:FF:DE:AD:BE:EF
-#trust FF:FF:DE:AD:BE:EF
-#devices
-#agent on
-#exit
-#EOF
-echo ... Communications Activated
-
-pulseaudio --start 
-
-# Startup sound
-aplay -d 5 -q -N sound/door_open_close.wav
+# Startup and background sound
+killall -q aplay
+killall -q speaker-test
+#aplay -d 5 -q sound/door_open_close.wav
+#while : ; do aplay sound/hum_mono.wav ; done &
 speaker-test -W ./sound -t wav -w hum_mono.wav -l 0 > /dev/null &
 
 # Activate Lights
+sudo killall pigpiod
+sudo pigpiod
+sleep 1
 raspi-gpio set 17 op
 raspi-gpio set 17 dh
 echo ... Hostile Action Displacement System Activated

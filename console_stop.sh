@@ -2,12 +2,12 @@
 #
 # TARDIS SFX module.  Kill Script.
 #
-# Copyright (C) 2017 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2019 Michael Thompson.  All Rights Reserved.
 #
-# Created 06-22-107 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 07-11-2017
+# Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
+# Last modified 01-11-2019
 #
-# Version 0.0.1
+# Version 3.0.1
 #
 
 
@@ -21,3 +21,7 @@ echo ... Stealth Mode!
 # Deactivate Lights
 raspi-gpio set 17 op
 raspi-gpio set 17 dl
+
+# Stop sound
+killall -q aplay
+killall -q speaker-test
