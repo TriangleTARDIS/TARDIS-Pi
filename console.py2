@@ -2,12 +2,12 @@
 #
 # TARDIS SFX module.
 #
-# Copyright (C) 2017-2018 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2019 Michael Thompson.  All Rights Reserved.
 #
-# Created 06-22-107 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 01-19-2019
+# Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
+# Last modified 01-20-2019
 #
-# Version 3.0.2
+# Version 3.0.3
 #
 
 
@@ -111,7 +111,6 @@ def effectPulse(f, pwmSleep=pwmSleepDefault):
    except Exception as e:
        print("Failed")
        print(e)
-       pass
    
    conPrint("All Stop")
    piGPIO.set_PWM_dutycycle(bcmPin, 0)
@@ -132,14 +131,13 @@ def effectBlink(f):
 
    try:
       for l in [100, 0, 25, 100, 0, 25, 100]:
-         debugPrint("Level: " + str(l))
+         #debugPrint("Level: " + str(l))
          piGPIO.set_PWM_dutycycle(bcmPin, l)
          time.sleep(0.1)
 
    except Exception as e:
        print("Failed")
        print(e)
-       pass
    
    conPrint("Locked")
    piGPIO.set_PWM_dutycycle(bcmPin, 0)
@@ -152,6 +150,10 @@ def effectBlink(f):
 def sig_handler(signal, frame):
    conPrint("Emergency Exit")
    piGPIO.stop()
+
+   if gp != None:
+      gp.ungrab()
+
    sys.exit(1)
 
 
@@ -160,82 +162,109 @@ def sig_handler(signal, frame):
 #
 autoPilot = len(sys.argv) > 1
 os.system("./console_init_3.sh")
-conPrint("*****")
-conPrint("Console Enabled")
+conPrint("***** Console Enabled *****")
 
 #Init GPIO
 signal.signal(signal.SIGINT, sig_handler)
 piGPIO = pigpio.pi()
+piGPIO.set_mode(bcmPin, pigpio.OUTPUT)
 piGPIO.write(bcmPin, 1)
 
-if autoPilot:
-   conPrint("Auto Pilot")
+#Find Input Device
+conPrint("Locate Registered Operator")
+#playSound("runaway_scanning.wav", 5, True)
+devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
+gp = None
+
+for device in devices:
+   conPrint("Device: " + device.name + " [" + device.fn + "]")
+
+   #if evdev.ecodes.EV_ABS in device.capabilities():
+   if (device.name == devName):
+      gp = evdev.InputDevice(device.fn)
+      break
+
+if autoPilot and (gp is None):
    gp = evdev.InputDevice("/dev/input/event0")
-   gp.write(evdev.ecodes.EV_KEY, evdev.ecodes.KEY_LEFTSHIFT, 1)
-else:
-   conPrint("Locate Registered Operator")
-   #playSound("runaway_scanning.wav", 5, True)
-   devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
-   gp = None
 
-   for device in devices:
-      conPrint("Device: " + device.name + " [" + device.fn + "]")
-
-      if (device.name == devName):
-         gp = evdev.InputDevice(device.fn)
-         conPrint("Found Operator!")
-         break
-
+#Event Loop
 if not autoPilot and (gp is None):
    conPrint("Operator Missing!")
 else:
-    for event in gp.read_loop():
-      if event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL:
-         keyevent = evdev.categorize(event)
-         ranEvent = True
+   conPrint("Found Operator!  [" + gp.name + "] (Autopilot: " + str(autoPilot) + ")")
+   gp.grab()
+   r = 0
+   rf = 0
 
-         if event.type == evdev.ecodes.EV_KEY and keyevent.keystate == evdev.events.KeyEvent.key_down:
-            kCode = keyevent.keycode[0] if type(keyevent.keycode) is list else keyevent.keycode
-         elif event.code == evdev.ecodes.REL_WHEEL:
-            kCode = "UP" if event.value == 1 else "DOWN"
-         else:
-            kCode = None
+   while True:
+      time.sleep(0.01)
+      ranEvent = False
+      event = gp.read_one()
+
+      #Autopilot Injects Events periodically
+      if autoPilot:
+          if (r >= rf):
+            r = 0
+            rf = (random.randint(10,60)) * 100
+            conPrint("Next Wait: " + str(rf))
+            event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
+ 
+      #Handle Event
+      if (event != None) and (event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL):
+         keyevent = evdev.categorize(event)
+         kCode = None
+         debugPrint("EVENT: " + str(keyevent))
          
-         if autoPilot:
-            foo = ['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN']
-            kCode = random.choice(foo)
+         if (autoPilot and r == 0):
+            conPrint("Automatic action")
+            kCode = random.choice(["UP", "BTN_MIDDLE", "BTN_LEFT", "BTN_RIGHT", "DOWN"])
+         else:
+            #Handle multiple key press and convert mouse wheel axis to single press
+            if event.type == evdev.ecodes.EV_KEY and keyevent.keystate == evdev.events.KeyEvent.key_down:
+               kCode = keyevent.keycode[0] if type(keyevent.keycode) is list else keyevent.keycode
+            elif event.code == evdev.ecodes.REL_WHEEL:
+               kCode = "UP" if event.value == 1 else "DOWN"
 
          if kCode != None:
+            r = 0
             debugPrint("KEY: " + kCode)
 
+         #Run Effect
          if kCode == "BTN_LEFT":
             effectPulse("takeoff.wav", pwmSleepDefault * 2)
+            ranEvent = True
          elif kCode == "BTN_MIDDLE":
             effectBlink("lock_chirp.wav")
+            ranEvent = True
          elif kCode == "BTN_RIGHT":
             effectPulse("exterior_telephone.wav", pwmSleepDefault * 0.5)
+            ranEvent = True
          elif kCode == "UP":
             effectPulse("cloister_bell.wav", pwmSleepDefault * 3)
+            ranEvent = True
          elif kCode == "DOWN":
             effectPulse("denied_takeoff.wav", pwmSleepDefault * 1.5)
-         else:
-            ranEvent = False
+            ranEvent = True
+         elif kCode != None:
+            debugPrint("Unused Key: " + str(kCode))
 
+         #Empty Input Buffer
          if ranEvent:
             while gp.read_one() != None:
+               #sys.stdout.write("%")
                pass
+            #sys.stdout.write("\n\n")
 
          piGPIO.write(bcmPin, 1)
+      #endif
 
-         if autoPilot:
-            gp.write(evdev.ecodes.EV_KEY, evdev.ecodes.KEY_LEFTSHIFT, 0)
-            gp.write(evdev.ecodes.EV_KEY, evdev.ecodes.KEY_LEFTSHIFT, 1)
-            r = (random.randint(1,5) * 1000) + 5000
-            conPrint("Wait: " + str(r))
-            time.sleep(r)
-
+      r += 1
+   #endWhile
 
 # Finish
 piGPIO.write(bcmPin, 1)
 piGPIO.stop()
 conPrint("Safe Exit")
+
+if gp != None:
+   gp.ungrab()
