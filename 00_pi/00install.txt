@@ -1,0 +1,33 @@
+TARDIS
+----+----+----+----+----+
+
+Configuration
+-------------
+*Connect WIFI
+*Run raspi-config
+	*Change password
+	*Change hostname
+	*Disable boot splash
+	*Enable SSH & VNC
+	*Audio Force Headphone
+	*Expand Filesystem
+	*Localisation - Keyboard - Generic 104-Key - Other/English (US)
+	*Reboot
+*Setup screen/background
+	*Add CPU and Minimize to panel
+*Setup Audio defaults
+*cp /usr/share/zoneinfo/America/New_York /etc/localtime 
+*Copy config.txt to /boot for small panel
+*apt-get install xscreensaver
+
+
+Audio
+-----
+*Optionals: youtube-dl
+*apt-get libav-tools, audacity
+
+
+Program
+-------
+*apt-get install python-dev
+*pip install evdev
