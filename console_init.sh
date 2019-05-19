@@ -5,9 +5,9 @@
 # Copyright (C) 2017-2019 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-107 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 01-19-2019
+# Last modified 05-19-2019
 #
-# Version 3.0.2
+# Version 4.0.0
 #
 
 clear
@@ -26,8 +26,6 @@ echo ... Audio Interface Activated
 # Startup and background sound
 killall -q aplay
 killall -q speaker-test
-#aplay -d 5 -q sound/door_open_close.wav
-#while : ; do aplay sound/hum_mono.wav ; done &
 speaker-test -W ./sound -t wav -w hum_mono.wav -l 0 > /dev/null &
 
 # Activate Lights
@@ -36,6 +34,12 @@ sudo pigpiod
 sleep 1
 raspi-gpio set 17 op
 raspi-gpio set 17 dh
+raspi-gpio set 6 op
+raspi-gpio set 6 dl
+raspi-gpio set 13 op
+raspi-gpio set 13 dl
+raspi-gpio set 5 op
+raspi-gpio set 5 dl
 echo ... Hostile Action Displacement System Activated
 
 # Finish
