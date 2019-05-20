@@ -19,6 +19,8 @@ echo ...
 echo ... Stealth Mode!
 
 # Deactivate Lights
+sudo killall pigpiod
+sleep 1
 raspi-gpio set 17 op
 raspi-gpio set 17 dl
 raspi-gpio set 6 op
