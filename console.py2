@@ -5,9 +5,9 @@
 # Copyright (C) 2017-2019 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 01-20-2019
+# Last modified 05-19-2019
 #
-# Version 3.0.3
+# Version 4.0.1
 #
 
 
@@ -29,11 +29,16 @@ import pigpio
 devName = "Logitech USB Receiver"
 dirSound = "sound/"
 pwmHz = 120
-pwmSleepDefault = 0.010
-pwmStep = 100
-debug = False
+#pwmHz = 1200
+#pwmStep is min 25
+pwmStep = 255
+pwmSleepDefault = 1 / pwmStep
+debug = True
 autoPilot = False
 bcmPin = 17
+bcmPinR = 6
+bcmPinG = 13
+bcmPinB = 5
 piGPIO = None
 
 
@@ -57,10 +62,10 @@ def debugPrint(s):
 #
 def lenSound(f):
    debugPrint("Sound: " + f)
-   with contextlib.closing(wave.open(dirSound + f, "r")) as w: 
+   with contextlib.closing(wave.open(dirSound + f, "r")) as w:
       len = w.getnframes() / float(w.getframerate())
-  
-   debugPrint(" -- " + str(len) + " Seconds") 
+
+   debugPrint(" -- " + str(len) + " Seconds")
    return len
 
 
@@ -84,25 +89,75 @@ def playSound(f, secs=0, blk=False):
 
 
 #
+# Reset LEDs.
+#
+def resetRGB():
+   debugPrint("Reset RGB.")
+   piGPIO.write(bcmPinR, 0)
+   piGPIO.write(bcmPinG, 0)
+   piGPIO.write(bcmPinB, 0)
+
+
+#
+# Begin PWM.
+#
+def beginPWM():
+   conPrint("Begin PWM.")
+   resetRGB()
+   piGPIO.set_PWM_frequency(bcmPinR, pwmHz)
+   piGPIO.set_PWM_range(bcmPinR, pwmStep)
+   piGPIO.set_PWM_frequency(bcmPinG, pwmHz)
+   piGPIO.set_PWM_range(bcmPinG, pwmStep)
+   piGPIO.set_PWM_frequency(bcmPinB, pwmHz)
+   piGPIO.set_PWM_range(bcmPinB, pwmStep)
+
+
+#
+# RGB Sinebow.
+# http://basecase.org/env/on-rainbows
+#
+def sinebow(h):
+  h += 1/2
+  h *= -1
+  r = math.sin(math.pi * h)
+  g = math.sin(math.pi * (h + 1/3))
+  b = math.sin(math.pi * (h + 2/3))
+  return (int(255*chan**2) for chan in (r, g, b))
+def nthcolor(n):
+  phi = (1+5**0.5)/2
+  return sinebow(n * phi)
+
+
+#
+# End PWM.
+#
+def endPWM():
+   conPrint("End PWM.")
+   piGPIO.set_PWM_dutycycle(bcmPinR, 0)
+   piGPIO.set_PWM_dutycycle(bcmPinG, 0)
+   piGPIO.set_PWM_dutycycle(bcmPinB, 0)
+   resetRGB()
+
+
+#
 # Pulse Lights / Dematerialise effect.
 #
 def effectPulse(f, pwmSleep=pwmSleepDefault):
    conPrint("Pulse: " + f)
    len = lenSound(f)
    playSound(f)
-    
-   piGPIO.write(bcmPin, 1)
-   piGPIO.set_PWM_frequency(bcmPin, pwmHz)
-   piGPIO.set_PWM_range(bcmPin, 100)
+   beginPWM()
 
    try:
       r = int(len / pwmSleep)
       debugPrint("T: " + str(r))
-     
+
       for i in range(0,  r):
          l = int(pwmStep * 0.5 * ((math.cos((i / pwmStep) * 2 * math.pi)) + 1))
-         #debugPrint("Level: " + str(l))
-         piGPIO.set_PWM_dutycycle(bcmPin, l)
+         debugPrint("Level: " + str(l))
+         piGPIO.set_PWM_dutycycle(bcmPinR, pwmStep - l)
+         piGPIO.set_PWM_dutycycle(bcmPinG, pwmStep - l)
+         piGPIO.set_PWM_dutycycle(bcmPinB, pwmStep - l)
          time.sleep(pwmSleep)
 
       #Possibly wait out sound rounding error?
@@ -111,10 +166,49 @@ def effectPulse(f, pwmSleep=pwmSleepDefault):
    except Exception as e:
        print("Failed")
        print(e)
-   
+
    conPrint("All Stop")
-   piGPIO.set_PWM_dutycycle(bcmPin, 0)
-   piGPIO.write(bcmPin, 1)
+   endPWM()
+
+
+#
+# Pulse Lights RGB effect.
+#
+def effectPulseRGB(f, pwmSleep=pwmSleepDefault):
+   conPrint("PulseRGB: " + f)
+   len = lenSound(f)
+   playSound(f)
+   beginPWM()
+
+   try:
+      r = int(len / pwmSleep)
+      debugPrint("T: " + str(r))
+      lf = 2*math.pi/100;
+
+      for i in range(0,  r):
+         l = int(pwmStep * 0.5 * ((math.cos((i / pwmStep) * 2 * math.pi)) + 1))
+         #lR = int((math.sin(lf*i+0)* 127 + 128) / 255 * l);
+         #lG = int((math.sin(lf*i+2)* 127 + 128) / 255 * l);
+         #lB = int((math.sin(lf*i+4)* 127 + 128) / 255 * l);
+         l = pwmStep;
+         (lR, lG, lB) = sinebow(i/pwmStep);
+         #(lR, lG, lB) = nthcolor(i);
+         debugPrint("Level: " + str(i) + " : " + str(lR) + "-" + str(lG) + "-" + str(lB))
+         piGPIO.set_PWM_dutycycle(bcmPinR, pwmStep - lR)
+         piGPIO.set_PWM_dutycycle(bcmPinG, pwmStep - lG)
+         piGPIO.set_PWM_dutycycle(bcmPinB, pwmStep - lB)
+         time.sleep(pwmSleep)
+         time.sleep(pwmSleep*10)
+
+      #Possibly wait out sound rounding error?
+      #time.sleep(0.5)
+
+   except Exception as e:
+       print("Failed")
+       print(e)
+
+   conPrint("All Stop")
+   endPWM()
 
 
 #
@@ -124,24 +218,22 @@ def effectBlink(f):
    conPrint("Lock: " + f)
    len = lenSound(f)
    playSound(f)
-    
-   piGPIO.write(bcmPin, 1)
-   piGPIO.set_PWM_frequency(bcmPin, pwmHz)
-   piGPIO.set_PWM_range(bcmPin, 100)
+   beginPWM()
 
    try:
-      for l in [100, 0, 25, 100, 0, 25, 100]:
-         #debugPrint("Level: " + str(l))
-         piGPIO.set_PWM_dutycycle(bcmPin, l)
+      for l in [pwmStep, 0, pwmStep * 0.25, pwmStep, 0, pwmStep * 0.25, pwmStep]:
+         debugPrint("Level: " + str(l))
+         piGPIO.set_PWM_dutycycle(bcmPinR, pwmStep - l)
+         piGPIO.set_PWM_dutycycle(bcmPinG, pwmStep - l)
+         piGPIO.set_PWM_dutycycle(bcmPinB, pwmStep - l)
          time.sleep(0.1)
 
    except Exception as e:
        print("Failed")
        print(e)
-   
+
    conPrint("Locked")
-   piGPIO.set_PWM_dutycycle(bcmPin, 0)
-   piGPIO.write(bcmPin, 1)
+   endPWM()
 
 
 #
@@ -161,14 +253,16 @@ def sig_handler(signal, frame):
 # Main
 #
 autoPilot = len(sys.argv) > 1
-os.system("./console_init_3.sh")
+os.system("./console_init.sh")
 conPrint("***** Console Enabled *****")
 
 #Init GPIO
 signal.signal(signal.SIGINT, sig_handler)
 piGPIO = pigpio.pi()
-piGPIO.set_mode(bcmPin, pigpio.OUTPUT)
-piGPIO.write(bcmPin, 1)
+piGPIO.set_mode(bcmPinR, pigpio.OUTPUT)
+piGPIO.set_mode(bcmPinG, pigpio.OUTPUT)
+piGPIO.set_mode(bcmPinB, pigpio.OUTPUT)
+resetRGB()
 
 #Find Input Device
 conPrint("Locate Registered Operator")
@@ -179,7 +273,6 @@ gp = None
 for device in devices:
    conPrint("Device: " + device.name + " [" + device.fn + "]")
 
-   #if evdev.ecodes.EV_ABS in device.capabilities():
    if (device.name == devName):
       gp = evdev.InputDevice(device.fn)
       break
@@ -208,13 +301,13 @@ else:
             rf = (random.randint(10,60)) * 100
             conPrint("Next Wait: " + str(rf))
             event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
- 
+
       #Handle Event
       if (event != None) and (event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL):
          keyevent = evdev.categorize(event)
          kCode = None
          debugPrint("EVENT: " + str(keyevent))
-         
+
          if (autoPilot and r == 0):
             conPrint("Automatic action")
             kCode = random.choice(["UP", "BTN_MIDDLE", "BTN_LEFT", "BTN_RIGHT", "DOWN"])
@@ -231,13 +324,15 @@ else:
 
          #Run Effect
          if kCode == "BTN_LEFT":
+            #effectPulse("takeoff.wav", pwmSleepDefault * 2)
             effectPulse("takeoff.wav", pwmSleepDefault * 2)
             ranEvent = True
          elif kCode == "BTN_MIDDLE":
             effectBlink("lock_chirp.wav")
             ranEvent = True
          elif kCode == "BTN_RIGHT":
-            effectPulse("exterior_telephone.wav", pwmSleepDefault * 0.5)
+            #effectPulse("exterior_telephone.wav", pwmSleepDefault * 0.5)
+            effectPulseRGB("exterior_telephone.wav", pwmSleepDefault * 20)
             ranEvent = True
          elif kCode == "UP":
             effectPulse("cloister_bell.wav", pwmSleepDefault * 3)
@@ -251,18 +346,16 @@ else:
          #Empty Input Buffer
          if ranEvent:
             while gp.read_one() != None:
-               #sys.stdout.write("%")
                pass
-            #sys.stdout.write("\n\n")
 
-         piGPIO.write(bcmPin, 1)
+         resetRGB()
       #endif
 
       r += 1
    #endWhile
 
 # Finish
-piGPIO.write(bcmPin, 1)
+resetRGB()
 piGPIO.stop()
 conPrint("Safe Exit")
 
