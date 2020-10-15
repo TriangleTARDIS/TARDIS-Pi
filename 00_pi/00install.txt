@@ -1,22 +1,53 @@
-TARDIS
+TARDIS Pi Install
 ----+----+----+----+----+
 
 Configuration
 -------------
-*Connect WIFI
-*Run raspi-config
-	*Change password
-	*Change hostname
-	*Disable boot splash
-	*Enable SSH & VNC
-	*Audio Force Headphone
-	*Expand Filesystem
-	*Localisation - Keyboard - Generic 104-Key - Other/English (US)
-	*Reboot
-*Setup screen/background
-	*Add CPU and Minimize to panel
+*Create boot/ssh.txt file
+*First Boot
+        *SSH or console to host
+        *sudo raspi-config
+	        *Change password
+                *Network
+                	*Change hostname
+                        *Connect WIFI
+                *Boot                
+                	*Disable boot splash
+	        *Localisation
+                        *Change Timezone
+                        *Keyboard - Generic 104-Key PC - English (US)
+                        *Change WLAN Country
+                *Interfacing                
+                	*Enable SSH & VNC
+                *Advanced
+                	*Audio Force Headphone
+        *sudo nano /root/.vnc/config.d/vncserver-x11
+                *Add line:
+                Authentication=VncAuth
+        *sudo vncpasswd -service
+
+        *git clone https://github.com/TriangleTARDIS/TARDIS-Pi.git
+        *cd TARDIS-Pi
+        *pip install -r requirements.txt
+
+        *sudo shutdown -r now
+
+
+*Second Boot
+        *VNC to host
+        *Panel Settings:
+                *Bottom Edge
+                *Height/Icon Size: 28
+                *Add Panel Applets: 
+                        CPU Temperature Monitor
+                        CPU Usage Monitor
+                        Network Status Monitor
+	        *Set Network Status Monitor to wlan0
+        *Desktop Preferences
+                *System/Font: PibotoLt, 8  
+                *Set background to TARDIS console (TARDIS-Pi/images/)
+
 *Setup Audio defaults
-*cp /usr/share/zoneinfo/America/New_York /etc/localtime 
 *Copy config.txt to /boot for small panel
 *apt-get install xscreensaver
 
@@ -31,3 +62,13 @@ Program
 -------
 *apt-get install python-dev
 *pip install evdev
+
+apt-get install libasound2-dev
+python3 -m pip install simpleaudio
+python3 -m pip install bunch
+
+
+Wifi Bridge for Telephone
+----
+*apt-get dnsmasq
+

@@ -13,23 +13,18 @@
 
 clear
 cat asset/tardis_ascii_small.txt
-echo
-echo ... TT Type 40, Mark 3 ...
-echo ...
-echo ... Stealth Mode!
+echo ">>> TT Type 40, Mark 3 <<<"
 
 # Deactivate Lights
-sudo killall pigpiod
+sudo pigpiod
+./console.py stop
 sleep 1
-raspi-gpio set 17 op
-raspi-gpio set 17 dl
-raspi-gpio set 6 op
-raspi-gpio set 6 dh
-raspi-gpio set 13 op
-raspi-gpio set 13 dh
-raspi-gpio set 5 op
-raspi-gpio set 5 dh
+#raspi-gpio set X op
+#raspi-gpio set X dh
+echo Stealth Mode...
 
 # Stop sound
-killall -q aplay
 killall -q speaker-test
+echo Quiet Running...
+sleep 5
+

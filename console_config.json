@@ -1,0 +1,27 @@
+{
+  "__description__": "TARDIS-Pi Config File",
+  "__version__": "4.1.0",
+  "debug": false,
+  "hostName": "tardispi",
+  "autoPilot": false,
+  "__devName": "Compx 2.4G Receiver",
+  "devName": "Logitech USB Receiver",
+  "dirSound": "sound/",
+  "pwm": {
+    "Hz": 1200,
+    "step": 255
+  },
+  "bcmPin": {
+    "R": 6,
+    "G": 5,
+    "B": 13,
+    "W": 19
+  },
+  "gamma": 2.8,
+  "mix": {
+    "R": 3.0,
+    "G": 6.0,
+    "B": 1.0,
+    "W": 1.0
+  }
+}

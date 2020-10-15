@@ -1,3 +1,5 @@
 #!/bin/sh
 cd ~pi/TARDIS-Pi
-./console.py2
+sh console_init.sh
+lxterminal --working-directory=~pi/TARDIS-Pi --geometry=80x33 -e "./console.py"
+

@@ -1,10 +1,11 @@
 #!/bin/bash
 now=`date +"%Y%m%d%k%M"`
 echo "$now"
-sleep 1
 cd ..
-tar cvf TARDIS.tar TARDIS-Pi/
-mount /dev/sda1 /media/pi/USB10
-mount | grep sd
-cp -v TARDIS.tar "/media/pi/USB10/TARDIS_$now.tar"
+tar cvf TARDIS-Pi_Backup.tar TARDIS-Pi/
+
+sudo mkdir /mnt/sda1
+sudo mount /dev/sda1 /mnt/sda1
+mount | grep sda
+sudo cp -v TARDIS-Pi_Backup.tar "/mnt/sda1/TARDIS-Pi_Backup_$now.tar"
 

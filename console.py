@@ -1,138 +1,187 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #
 # TARDIS SFX module.
 #
 # Copyright (C) 2017-2020 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 02-07-2020
-#
-# Version 4.0.2
+# Last modified 10-13-2020
 #
 
 
-from __future__ import division
-__version__ = "4.0.2"
+__version__ = '4.1.0'
 
-
-import sys
-import os
-import signal
-import time
-from datetime import datetime
-import wave
+import curses
+import json
+import logging.config
 import math
-import contextlib
-import evdev
+import os
 import random
-import pigpio
+import signal
+import sys
+import time
+from pathlib import Path
 
+import evdev
+import munch
+import pigpio
+import simpleaudio
 
 # Globals
-#devName = "Compx 2.4G Receiver"
-devName = "Logitech USB Receiver"
-dirSound = "sound/"
-#pwmHz = 120
-pwmHz = 1200
-#pwmStep is min 25
-pwmStep = 255
-pwmSleepDefault = 1 / pwmStep
-debug = True
+# cfg = None
+# autoPilot:bool = False
+# pwmSleepDefault:float = None
+# piGPIO: pigpio = None
+# gp: evdev.InputDevice = None
+# winStatus: curses.window = None
+# winStatus2: curses.window = None
+# winConsole: curses.window = None
+# log: logging.Logger = None
+cfg = None
 autoPilot = False
-bcmPinR = 5
-bcmPinG = 6
-bcmPinB = 13
-bcmPinW = 19
+pwmSleepDefault = None
 piGPIO = None
 gp = None
+winStatus = None
+winStatus2 = None
+winConsole = None
+log = None
 
 
 #
 # Print a string to the console.
 #
 def conPrint(s):
-   now  = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-   print(now + " ... \033[94m" + s + "\033[0m")
+    log.info(s)
+
+    if winConsole is not None:
+        winConsole.addstr(' ' + s + '\n')
+        winConsole.box()
+        winConsole.noutrefresh()
 
 
 #
 # Print a debug string to the console.
 #
 def debugPrint(s):
-   if (debug):
-      now  = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-      sys.stderr.write(now + " > \033[31;5m" + s + "\033[0m\n")
+    log.debug(s)
+
+    if cfg.debug:
+        conPrint(s)
 
 
 #
-# Get length of a wave file.
+# Print a status string to the console.
 #
-def lenSound(f):
-   debugPrint("Sound: " + f)
-   with contextlib.closing(wave.open(dirSound + f, "r")) as w:
-      len = w.getnframes() / float(w.getframerate())
+def statusPrint(line, s, win=0):
+    w = winStatus if win == 0 else winStatus2
 
-   debugPrint(" -- " + str(len) + " Seconds")
-   return len
+    if w is not None:
+        x, y = w.getmaxyx()
+        y = y - 2
+        w.addstr(line, 1, s.ljust(y)[:y])
+        w.refresh()
+
+    # Really spammy
+    if cfg.debug:
+        log.debug(s)
+
+
+#
+# Refresh Status Windows.
+#
+def refreshWinStatus():
+    winStatus.clear()
+    winStatus.addstr(1, 1, 'Auto: {} '.format(autoPilot))
+    winStatus.addstr(2, 1, 'Term: {} '.format(curses.has_colors()))
+    winStatus.box()
+    winStatus.addstr(0, 1, 'TT40 Console', curses.color_pair(1))
+    winStatus.refresh()
+
+    winStatus2.clear()
+    winStatus2.addstr(1, 1, 'Load : {}'.format(os.getloadavg()))
+    winStatus2.addstr(2, 1, 'Gamma: {:1.2f}'.format(cfg.gamma))
+    txt = Path('/sys/class/thermal/thermal_zone0/temp').read_text()
+    winStatus2.addstr(3, 1, 'Temp : {:3.1f} F'.format(((float(txt) / 1000) * 9 / 5) + 32))
+    winStatus2.box()
+    winStatus2.addstr(0, 1, 'Sensors', curses.color_pair(1))
+    winStatus2.refresh()
 
 
 #
 # Play a wave file.
 #
-def playSound(f, secs=0, blk=False):
-   debugPrint("Play: " + f)
-   c = "aplay -q -N "
-
-   if secs ==0 :
-      c = c + (dirSound + f)
-   else:
-      c = c + "-d %s %s" % (secs, dirSound + f)
-
-   if not blk:
-      c = c + " &"
-
-   debugPrint(c)
-   os.system(c)
+# FIXME: Implement blocking.
+#
+def playSound(f) -> simpleaudio.PlayObject:
+    return simpleaudio.WaveObject.from_wave_file(cfg.dirSound + f).play()
 
 
 #
 # Init GPIO.
 #
 def initGPIO():
-   global piGPIO
+    global piGPIO
 
-   piGPIO = pigpio.pi()
-   piGPIO.set_mode(bcmPinR, pigpio.OUTPUT)
-   piGPIO.set_mode(bcmPinG, pigpio.OUTPUT)
-   piGPIO.set_mode(bcmPinB, pigpio.OUTPUT)
-   piGPIO.set_mode(bcmPinW, pigpio.OUTPUT)
+    piGPIO = pigpio.pi(host=cfg.hostName)
 
 
 #
-# Reset LEDs.
+# Reset LEDs to full bright.
 #
-def resetRGB():
-   debugPrint("Reset RGB.")
-   piGPIO.write(bcmPinR, 0)
-   piGPIO.write(bcmPinG, 0)
-   piGPIO.write(bcmPinB, 0)
-   piGPIO.write(bcmPinW, 0)
+def fullBright(lvl=0):
+    statusPrint(3, 'Full Bright.')
+
+    for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+        if pin is not None:
+            piGPIO.write(pin, lvl)
+
+
+#
+# Gamma Shift a level.
+#
+def gammaShift(lvl) -> int:
+    return int(pow(float(lvl) / float(cfg.pwm.step), cfg.gamma) * cfg.pwm.step + 0.5)
+
+
+#
+# PWM Set Duty Cycle (with gamma correction).
+# FIXME: Gamma controls.
+#
+def setPwmDutyCycle(pin, lvl, adjust=True):
+    if pin is not None and pin > 0:
+        # FIXME: Adjust RGBW per channel.
+        if adjust:
+            lvla = gammaShift(lvl)
+        else:
+            lvla = lvl
+
+        piGPIO.set_PWM_dutycycle(pin, cfg.pwm.step - lvla)
 
 
 #
 # Begin PWM.
 #
 def beginPWM():
-   conPrint("Begin PWM.")
-   resetRGB()
-   piGPIO.set_PWM_frequency(bcmPinR, pwmHz)
-   piGPIO.set_PWM_range(bcmPinR, pwmStep)
-   piGPIO.set_PWM_frequency(bcmPinG, pwmHz)
-   piGPIO.set_PWM_range(bcmPinG, pwmStep)
-   piGPIO.set_PWM_frequency(bcmPinB, pwmHz)
-   piGPIO.set_PWM_range(bcmPinB, pwmStep)
-   piGPIO.set_PWM_frequency(bcmPinW, pwmHz)
-   piGPIO.set_PWM_range(bcmPinW, pwmStep)
+    # fullBright()
+    statusPrint(3, 'Begin PWM.')
+
+    for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+        if pin is not None:
+            piGPIO.set_PWM_frequency(pin, cfg.pwm.Hz)
+            piGPIO.set_PWM_range(pin, cfg.pwm.step)
+
+
+#
+# End PWM.
+#
+def endPWM():
+    statusPrint(3, 'End PWM.')
+
+    for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+        setPwmDutyCycle(pin, cfg.pwm.step)
+
+    # fullBright()
 
 
 #
@@ -140,256 +189,335 @@ def beginPWM():
 # http://basecase.org/env/on-rainbows
 #
 def sinebow(h):
-  h += 1/2
-  h *= -1
-  r = math.sin(math.pi * h)
-  g = math.sin(math.pi * (h + 1/3))
-  b = math.sin(math.pi * (h + 2/3))
+    h += 1 / 2
+    h *= -1
+    r = math.sin(math.pi * h)
+    g = math.sin(math.pi * (h + 1 / 3))
+    b = math.sin(math.pi * (h + 2 / 3))
+    return (int(255 * chan ** 2) for chan in (r, g, b))
 
-  return (int(255*chan**2) for chan in (r, g, b))
 
+#
+# RGB Sequence.
+# http://basecase.org/env/on-rainbows
+#
 def nthcolor(n):
-  phi = (1+5**0.5)/2
-  return sinebow(n * phi)
-
-
-#
-# End PWM.
-#
-def endPWM():
-   conPrint("End PWM.")
-   piGPIO.set_PWM_dutycycle(bcmPinR, 0)
-   piGPIO.set_PWM_dutycycle(bcmPinG, 0)
-   piGPIO.set_PWM_dutycycle(bcmPinB, 0)
-   piGPIO.set_PWM_dutycycle(bcmPinW, 0)
-   resetRGB()
+    phi = (1 + 5 ** 0.5) / 2
+    return sinebow(n * phi)
 
 
 #
 # Pulse Lights / Dematerialise effect.
 #
 def effectPulse(f, pwmSleep=pwmSleepDefault):
-   conPrint("Pulse: " + f)
-   len = lenSound(f)
-   playSound(f)
-   beginPWM()
+    conPrint('Pulse: ' + f)
+    beginPWM()
+    play = playSound(f)
 
-   try:
-      r = int(len / pwmSleep)
-      debugPrint("T: " + str(r))
+    i = 0
+    while play.is_playing():
+        lvla = int(cfg.pwm.step * 0.5 * ((math.cos((i / cfg.pwm.step) * 2 * math.pi)) + 1))
+        statusPrint(4, 'Level: {:6g} of {:6g}'.format(lvla, cfg.pwm.step))
 
-      for i in range(0,  r):
-         l = int(pwmStep * 0.5 * ((math.cos((i / pwmStep) * 2 * math.pi)) + 1))
-         debugPrint("Level: " + str(l))
-         piGPIO.set_PWM_dutycycle(bcmPinR, pwmStep - l)
-         piGPIO.set_PWM_dutycycle(bcmPinG, pwmStep - l)
-         piGPIO.set_PWM_dutycycle(bcmPinB, pwmStep - l)
-         piGPIO.set_PWM_dutycycle(bcmPinW, pwmStep - l)
-         time.sleep(pwmSleep)
+        for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+            setPwmDutyCycle(pin, lvla)
 
-      #Possibly wait out sound rounding error?
-      #time.sleep(0.5)
+        time.sleep(pwmSleep)
+        i = i + 1
 
-   except Exception as e:
-       print("Failed")
-       print(e)
-
-   conPrint("All Stop")
-   endPWM()
+    endPWM()
+    statusPrint(4, '')
+    conPrint('All Stop')
 
 
 #
 # Pulse Lights RGB effect.
 #
-def effectPulseRGB(f, pwmSleep=pwmSleepDefault):
-   conPrint("PulseRGB: " + f)
-   len = lenSound(f)
-   playSound(f)
-   beginPWM()
+def effectPulseRGB(f, pwmSleep=pwmSleepDefault, rand=False):
+    conPrint('PulseRGB: ' + f)
+    play = playSound(f)
+    beginPWM()
+    setPwmDutyCycle(cfg.bcmPin.W, 0)
 
-   try:
-      r = int(len / pwmSleep)
-      debugPrint("T: " + str(r))
-      lf = 2*math.pi/100;
+    i = 0
+    while play.is_playing():
+        (lR, lG, lB) = nthcolor(i) if rand else sinebow(i / cfg.pwm.step)
+        statusPrint(4, 'Level: {:6g} - [{:3g}, {:3g}, {:3g}]'.format(i, lR, lG, lB))
 
-      for i in range(0,  r):
-         l = int(pwmStep * 0.5 * ((math.cos((i / pwmStep) * 2 * math.pi)) + 1))
-         l = pwmStep;
-         (lR, lG, lB) = sinebow(i/pwmStep);
-         #(lR, lG, lB) = nthcolor(i);
-         debugPrint("Level: " + str(i) + " : " + str(lR) + "-" + str(lG) + "-" + str(lB))
-         piGPIO.set_PWM_dutycycle(bcmPinR, pwmStep - lR)
-         piGPIO.set_PWM_dutycycle(bcmPinG, pwmStep - lG)
-         piGPIO.set_PWM_dutycycle(bcmPinB, pwmStep - lB)
-         piGPIO.set_PWM_dutycycle(bcmPinW, pwmStep)
-         time.sleep(pwmSleep)
+        setPwmDutyCycle(cfg.bcmPin.R, lR)
+        setPwmDutyCycle(cfg.bcmPin.G, lG)
+        setPwmDutyCycle(cfg.bcmPin.B, lB)
 
-      #Possibly wait out sound rounding error?
-      #time.sleep(0.5)
+        time.sleep(pwmSleep)
+        i = i + 1
 
-   except Exception as e:
-       print("Failed")
-       print(e)
-
-   conPrint("All Stop")
-   endPWM()
+    endPWM()
+    statusPrint(4, '')
+    conPrint('All Stop')
 
 
 #
 # Blink Lights / Door Lock effect.
 #
 def effectBlink(f):
-   conPrint("Lock: " + f)
-   len = lenSound(f)
-   playSound(f)
-   beginPWM()
+    conPrint('Lock: ' + f)
+    play = playSound(f)
+    beginPWM()
 
-   try:
-      for l in [pwmStep, 0, pwmStep * 0.25, pwmStep, 0, pwmStep * 0.25, pwmStep]:
-         debugPrint("Level: " + str(l))
-         piGPIO.set_PWM_dutycycle(bcmPinR, pwmStep - l)
-         piGPIO.set_PWM_dutycycle(bcmPinG, pwmStep - l)
-         piGPIO.set_PWM_dutycycle(bcmPinB, pwmStep - l)
-         piGPIO.set_PWM_dutycycle(bcmPinW, pwmStep - l)
-         time.sleep(0.1)
+    for lvl in [cfg.pwm.step, 0, cfg.pwm.step * 0.25, cfg.pwm.step, 0, cfg.pwm.step * 0.25, cfg.pwm.step]:
+        statusPrint(4, 'Level: {:6g} of {:6g}'.format(lvl, cfg.pwm.step))
 
-   except Exception as e:
-       print("Failed")
-       print(e)
+        for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+            piGPIO.set_PWM_dutycycle(pin, lvl)
 
-   conPrint("Locked")
-   endPWM()
+        time.sleep(0.1)
+
+    endPWM()
+    statusPrint(4, '')
+    conPrint('Locked')
+
+
+#
+# Shutdown.
+#
+def shutdown():
+    global piGPIO
+    global gp
+
+    try:
+        log.debug('Shutdown Curses')
+        curses.endwin()
+    except:
+        pass
+
+    if piGPIO is not None:
+        log.debug('Shutdown PIGPIO')
+        piGPIO.stop()
+        piGPIO = None
+
+    if gp is not None:
+        log.debug('Shutdown evDev')
+        gp.ungrab()
+        gp = None
+
+    log.debug('Shutdown finished')
 
 
 #
 # Signal Handler.
 #
 def sig_handler(signal, frame):
-   conPrint("Emergency Exit")
-   if piGPIO != None:
-      piGPIO.stop()
-
-   if gp != None:
-      gp.ungrab()
-
-   sys.exit(1)
+    shutdown()
+    sys.exit(1)
 
 
 #
-# Main
+# Main Loop.
 #
-def mainLoop():
-   global gp
+def mainLoop(stdscr):
+    # FIXME: def mainLoop(stdscr: curses.window):
+    global gp
+    global winConsole
+    global winStatus
+    global winStatus2
 
-   signal.signal(signal.SIGINT, sig_handler)
-   autoPilot = len(sys.argv) > 1
-   os.system("./console_init.sh")
-   conPrint("***** Console Enabled *****")
+    # Setup Curses TUI
+    curses.resizeterm(33, 80)
+    curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_WHITE)
 
-   #Init GPIO
-   initGPIO()
-   resetRGB()
+    stdscr.nodelay(True)
+    # for l in range(0, 32):
+    #    stdscr.addstr(l, 0, str(l).rjust(80, '*'))
+    # stdscr.refresh()
 
-   #Find Input Device
-   conPrint("Locate Registered Operator")
-   #playSound("runaway_scanning.wav", 5, True)
-   devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
-   gp = None
+    winStatus = curses.newwin(6, 40, 0, 0)
+    winStatus2 = curses.newwin(6, 40, 0, 40)
+    refreshWinStatus()
 
-   for device in devices:
-      conPrint("Device: " + device.name + " [" + device.fn + "]")
+    winConsole = curses.newwin(26, 60, 6, 10)
+    winConsole.scrollok(True)
 
-      if (device.name == devName):
-        gp = evdev.InputDevice(device.fn)
-        break
+    # Run System Init
+    # FIXME: This hangs on Pi.
+    # with subprocess.Popen(['./console_init.sh'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
+    #    next_line = proc.stdout.readline()
+    #
+    #    while len(next_line) != 0:
+    #        winConsole.addstr(str(next_line, 'utf8'))
+    #        winConsole.box()
+    #        winConsole.refresh()
+    #        next_line = proc.stdout.readline()
+    conPrint('***** Console Enabled *****')
 
-   if autoPilot and (gp is None):
-      gp = evdev.InputDevice("/dev/input/event0")
+    # Init GPIO
+    initGPIO()
+    fullBright()
+    refreshWinStatus()
 
-   #Event Loop
-   if not autoPilot and (gp is None):
-      conPrint("Operator Missing!")
-   else:
-      conPrint("Found Operator!  [" + gp.name + "] (Autopilot: " + str(autoPilot) + ")")
-      gp.grab()
-      r = 0
-      rf = 0
+    # Find Input Device
+    conPrint('Locate Registered Operator')
+    # FIXME: playSound('runaway_scanning.wav', 5, True)
+    devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
 
-      while True:
-        time.sleep(0.01)
-        ranEvent = False
-        event = gp.read_one()
+    for device in devices:
+        log.debug('Device: ' + device.name + ' [' + device.path + ']')
 
-        #Autopilot Injects Events periodically
-        if autoPilot:
-           if (r >= rf):
-            r = 0
-            rf = (random.randint(10,60)) * 100
-            conPrint("Next Wait: " + str(rf))
-            event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
+        if device.name == cfg.devName:
+            gp = evdev.InputDevice(device.path)
+            break
 
-        #Handle Event
-        if (event != None) and (event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL):
-          keyevent = evdev.categorize(event)
-          kCode = None
-          debugPrint("EVENT: " + str(keyevent))
+    if autoPilot and (gp is None):
+        gp = evdev.InputDevice('/dev/input/event0')
 
-          if (autoPilot and r == 0):
-            conPrint("Automatic action")
-            kCode = random.choice(["UP", "BTN_MIDDLE", "BTN_LEFT", "BTN_RIGHT", "DOWN"])
-          else:
-            #Handle multiple key press and convert mouse wheel axis to single press
-            if event.type == evdev.ecodes.EV_KEY and keyevent.keystate == evdev.events.KeyEvent.key_down:
-               kCode = keyevent.keycode[0] if type(keyevent.keycode) is list else keyevent.keycode
-            elif event.code == evdev.ecodes.REL_WHEEL:
-               kCode = "UP" if event.value == 1 else "DOWN"
+    # Event Loop
+    if not autoPilot and (gp is None):
+        raise Exception('Operator Missing!')
+    else:
+        conPrint('Found Operator! [' + gp.name + ']')
+        gp.grab()
 
-          if kCode != None:
-            r = 0
-            debugPrint("KEY: " + kCode)
+        r = 0
+        rf = 0
+        vworp = True
 
-          #Run Effect
-          if kCode == "BTN_LEFT":
-            effectPulse("takeoff.wav", pwmSleepDefault * 2)
-            ranEvent = True
-          elif kCode == "BTN_MIDDLE":
-            effectBlink("lock_chirp.wav")
-            ranEvent = True
-          elif kCode == "BTN_RIGHT":
-            #effectPulse("exterior_telephone.wav", pwmSleepDefault * 0.5)
-            effectPulseRGB("exterior_telephone.wav", pwmSleepDefault * 3)
-            ranEvent = True
-          elif kCode == "UP":
-            effectPulse("cloister_bell.wav", pwmSleepDefault * 3)
-            ranEvent = True
-          elif kCode == "DOWN":
-            effectPulse("denied_takeoff.wav", pwmSleepDefault * 1.5)
-            ranEvent = True
-          elif kCode != None:
-            debugPrint("Unused Key: " + str(kCode))
+        while vworp:
+            time.sleep(0.1)
+            ranEvent = False
+            event = gp.read_one()
+            curseKey = stdscr.getch()
 
-          #Empty Input Buffer
-          if ranEvent:
-            while gp.read_one() != None:
-               pass
+            # Autopilot Injects Events periodically
+            if autoPilot and (r >= rf):
+                r = 0
+                rf = (random.randint(10, 60)) * 100
+                conPrint('Next Wait: ' + str(rf))
+                event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
 
-          resetRGB()
-        #endif
+            # Handle Event
+            if (event is not None and (event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL)) or (
+                    curseKey != curses.ERR):
+                kCode = None
 
-        r += 1
-      #endWhile
+                if autoPilot and r == 0:
+                    conPrint('Automatic action')
+                    kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN'])
+                else:
+                    conPrint('Normal action')
 
-   # Finish
-   resetRGB()
-   piGPIO.stop()
-   conPrint("Safe Exit")
+                    # Handle EVDEV and Curses inputs
+                    if event is not None:
+                        keyevent = evdev.categorize(event)
 
-   if gp != None:
-      gp.ungrab()
+                        # Handle multiple key press and convert mouse wheel axis to single press
+                        if event.type == evdev.ecodes.EV_KEY and keyevent.keystate == evdev.events.KeyEvent.key_down:
+                            kCode = keyevent.keycode[0] if type(keyevent.keycode) is list else keyevent.keycode
+                        elif event.code == evdev.ecodes.REL_WHEEL:
+                            kCode = 'UP' if event.value == 1 else 'DOWN'
+                    else:
+                        kCode = chr(curseKey)
+
+                if kCode is not None:
+                    r = 0
+                    statusPrint(4, 'KEY: ' + kCode)
+
+                # Run Effect
+                if kCode == 'BTN_LEFT' or kCode == 'w':
+                    effectPulse('takeoff.wav', pwmSleepDefault * 2)
+                    ranEvent = True
+                elif kCode == 'BTN_MIDDLE' or kCode == 'e':
+                    effectBlink('lock_chirp.wav')
+                    ranEvent = True
+                elif kCode == 'BTN_RIGHT' or kCode == 'r':
+                    effectPulse('exterior_telephone.wav', pwmSleepDefault)
+                    ranEvent = True
+                elif kCode == 'UP' or kCode == 't':
+                    effectPulseRGB('cloister_bell.wav', pwmSleepDefault * 50, True)
+                    ranEvent = True
+                elif kCode == 'DOWN' or kCode == 'y':
+                    effectPulseRGB('denied_takeoff.wav', pwmSleepDefault * 1.5)
+                    ranEvent = True
+                elif kCode == 'q':
+                    vworp = False
+                elif kCode is not None:
+                    debugPrint('Unused Key: ' + str(kCode))
+
+                # Empty Input Buffer
+                if ranEvent:
+                    refreshWinStatus()
+                    curses.flushinp()
+                    curses.doupdate()
+
+                    while gp.read_one() is not None:
+                        pass
+
+                fullBright()
+            # endif
+
+            r += 1
+        # endWhile
+
+
+# End mainLoop
+
+
+#
+# Read Config.
+#
+def readConfig():
+    global cfg
+    global pwmSleepDefault
+
+    with open('console_config.json') as f:
+        cfg = munch.munchify(json.load(f))
+
+    pwmSleepDefault = 1 / cfg.pwm.step
+
+    log.info(cfg)
+    log.debug("Debug: %s", cfg.debug)
+    log.debug("Pins: R:%s G:%s B:%s W:%s", cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W)
+    log.debug("PWM Sleep: %s", pwmSleepDefault)
 
 
 #
 # Init.
 #
-if __name__ == "__main__":
-   mainLoop()
+if __name__ == '__main__':
+    try:
+        stopMode = False
+
+        # Set XTerm Title
+        print('\33]0;TT40_Console\a', end='', flush=True)
+
+        # Handle Break
+        signal.signal(signal.SIGINT, sig_handler)
+
+        # Config Logging
+        logging.config.fileConfig('logging.ini')
+        log = logging.getLogger()
+        log.info('Event Zero.')
+
+        # Read General Config
+        readConfig()
+
+        if len(sys.argv) > 1:
+            autoPilot = sys.argv[1] == "auto"
+            stopMode = sys.argv[1] == "stop"
+
+        if stopMode:
+            # Kill the lights
+            initGPIO()
+            fullBright(1)
+            log.info('Stop Mode')
+        else:
+            # Start TUI Loop
+            curses.wrapper(mainLoop)
+            shutdown()
+
+        print('Safe Exit')
+        log.info('Safe Exit')
+    except BaseException as e:
+        shutdown()
+        log.critical('Emergency Exit, unexpected error.', exc_info=sys.exc_info())
+        print('Emergency Exit.  See log for details.')
+        print(sys.exc_info())
+        raise
