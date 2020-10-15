@@ -11,13 +11,13 @@ Configuration
                 *Network
                 	*Change hostname
                         *Connect WIFI
-                *Boot                
+                *Boot
                 	*Disable boot splash
 	        *Localisation
                         *Change Timezone
                         *Keyboard - Generic 104-Key PC - English (US)
                         *Change WLAN Country
-                *Interfacing                
+                *Interfacing
                 	*Enable SSH & VNC
                 *Advanced
                 	*Audio Force Headphone
@@ -29,6 +29,7 @@ Configuration
         *git clone https://github.com/TriangleTARDIS/TARDIS-Pi.git
         *cd TARDIS-Pi
         *pip install -r requirements.txt
+        *cp shortcuts/* ../Desktop/
 
         *sudo shutdown -r now
 
@@ -38,13 +39,13 @@ Configuration
         *Panel Settings:
                 *Bottom Edge
                 *Height/Icon Size: 28
-                *Add Panel Applets: 
+                *Add Panel Applets:
                         CPU Temperature Monitor
                         CPU Usage Monitor
                         Network Status Monitor
 	        *Set Network Status Monitor to wlan0
         *Desktop Preferences
-                *System/Font: PibotoLt, 8  
+                *System/Font: PibotoLt, 8
                 *Set background to TARDIS console (TARDIS-Pi/images/)
 
 *Setup Audio defaults
@@ -71,4 +72,3 @@ python3 -m pip install bunch
 Wifi Bridge for Telephone
 ----
 *apt-get dnsmasq
-
