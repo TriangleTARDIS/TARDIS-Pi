@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Sensor Log
+Exec=/home/pi/TARDIS-Pi/sensor_log.sh
+Icon=ksysguard
+Type=Application
+Categories=GTK;Utility;TerminalEmulator;
+StartupNotify=true
+Terminal=true
+X-KeepTerminal=true
+Path=/home/pi/TARDIS-Pi/

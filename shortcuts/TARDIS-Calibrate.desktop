@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Calibration
+Exec=/home/pi/TARDIS-Pi/calibrate.py
+Icon=style
+Type=Application
+Categories=GTK;Utility;TerminalEmulator;
+StartupNotify=true
+Terminal=true
+X-KeepTerminal=false
+Path=/home/pi/TARDIS-Pi/

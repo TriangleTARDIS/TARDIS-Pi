@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Auto Mode
+Exec=/home/pi/TARDIS-Pi/go_auto.sh
+Icon=galculator
+Type=Application
+Categories=GTK;Utility;TerminalEmulator;
+StartupNotify=true
+Terminal=true
+X-KeepTerminal=false
+Path=/home/pi/TARDIS-Pi/
