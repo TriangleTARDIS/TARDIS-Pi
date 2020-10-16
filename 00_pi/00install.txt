@@ -3,72 +3,19 @@ TARDIS Pi Install
 
 Configuration
 -------------
-*Create boot/ssh.txt file
-*First Boot
-        *SSH or console to host
-        *sudo raspi-config
-	        *Change password
-                *Network
-                	*Change hostname
-                        *Connect WIFI
-                *Boot
-                	*Disable boot splash
-	        *Localisation
-                        *Change Timezone
-                        *Keyboard - Generic 104-Key PC - English (US)
-                        *Change WLAN Country
-                *Interfacing
-                	*Enable SSH & VNC
-                *Advanced
-                	*Audio Force Headphone
-        *sudo nano /root/.vnc/config.d/vncserver-x11
-                *Add line:
-                Authentication=VncAuth
-        *sudo vncpasswd -service
+*Copy 00_pi/raspi-config.txt to SD Card /boot/
+*Create /boot/ssh.txt file
+*First Boot, SSH or console to host
+   sudo env HNAME=hostName WNAME=wifiName WPWD=wifiPassword sh /boot/raspi-config.txt
 
-        *git clone https://github.com/TriangleTARDIS/TARDIS-Pi.git
-        *cd TARDIS-Pi
-        *pip install -r requirements.txt
-        *cp shortcuts/* ../Desktop/
+   git clone https://github.com/TriangleTARDIS/TARDIS-Pi.git ~/TARDIS-Pi/
+   pip3 install -r ~/TARDIS-Pi/requirements.txt
+   cp -rv ~/TARDIS-Pi/00_pi/home/. ~/
+   sudo shutdown -r now
 
-        *sudo shutdown -r now
+*Second Boot, VNC to host
+   *Setup a screensaver
+   *Configure audio if necessary
+   *Run Calibration to verify LEDs
 
-
-*Second Boot
-        *VNC to host
-        *Panel Settings:
-                *Bottom Edge
-                *Height/Icon Size: 28
-                *Add Panel Applets:
-                        CPU Temperature Monitor
-                        CPU Usage Monitor
-                        Network Status Monitor
-	        *Set Network Status Monitor to wlan0
-        *Desktop Preferences
-                *System/Font: PibotoLt, 8
-                *Set background to TARDIS console (TARDIS-Pi/images/)
-
-*Setup Audio defaults
-*Copy config.txt to /boot for small panel
-*apt-get install xscreensaver
-
-
-Audio
------
-*Optionals: youtube-dl
-*apt-get libav-tools, audacity
-
-
-Program
--------
-*apt-get install python-dev
-*pip install evdev
-
-apt-get install libasound2-dev
-python3 -m pip install simpleaudio
-python3 -m pip install bunch
-
-
-Wifi Bridge for Telephone
-----
-*apt-get dnsmasq
+*Copy config.txt to /boot for small panel (800x480)

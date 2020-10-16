@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Stop Console
 Exec=/home/pi/TARDIS-Pi/console_stop.sh
-Icon=gksu-root-terminal
+Icon=xfce-man
 Type=Application
 Categories=GTK;Utility;TerminalEmulator;
 StartupNotify=true
