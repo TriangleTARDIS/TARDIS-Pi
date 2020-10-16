@@ -1,0 +1,67 @@
+#/bin/sh
+#https://gist.github.com/damoclark/ab3d700aafa140efb97e510650d9b1be#file-raspi-config-txt
+
+#
+# Don't change the following lines unless you know what you are doing
+# They execute the config options starting with 'do_' below
+grep -E -v -e '^\s*#' -e '^\s*$' <<END | \
+sed -e 's/$//' -e 's/^\s*/\/usr\/bin\/raspi-config nonint /' | bash -x -
+#
+############# INSTRUCTIONS ###########
+#
+# Change following options starting with 'do_' to suit your configuration
+#
+# Anything after a has '#' is ignored and used for comments
+#
+# If on Windows, edit using Notepad++ or another editor that can save the file
+# using UNIX-style line endings
+#
+# macOS and GNU/Linux use UNIX-style line endings - use whatever editor you like
+#
+# Then drop the file into the boot partition of your SD card
+#
+# After booting the Raspberry Pi, login as user 'pi' and run following command:
+#
+# sudo env HNAME=hostName WNAME=wifiName WPWD=wifiPassword sh /boot/raspi-config.txt
+#
+############# EDIT raspi-config SETTINGS BELOW ###########
+
+# Hardware Configuration
+do_ssh 0                  # Enable remote ssh login
+do_vnc 0
+do_boot_splash 1          # Disable the splash screen
+do_boot_behaviour B4      # Boot to CLI & require login
+do_audio 1                # Auto select audio output device
+
+# System Configuration
+do_configure_keyboard                        # Autodetect keyboard
+do_hostname ${HNAME}                         # Set hostname
+do_wifi_country US                           # Set wifi country
+do_wifi_ssid_passphrase ${WNAME} ${WPWD}     # Set wlan0 network to join 'wifi_name' network using 'password'
+do_change_timezone America/New_York          # Change timezone
+do_change_locale en_US.UTF-8                 # Set language
+
+#Don't add any raspi-config configuration options after 'END' line below & don't remove 'END' line
+END
+
+############# CUSTOM COMMANDS ###########
+# You may add your own custom GNU/Linux commands below this line
+# These commands will execute as the root user
+
+# Some examples - uncomment by removing '#' in front to test/experiment
+
+#/usr/bin/aptitude update                      # Update the software package information
+#/usr/bin/aptitude upgrade                     # Upgrade installed software to the latest versions
+
+# Interactively set password for your login
+echo "\n\nEnter pi password"
+passwd pi
+
+#Setup VNC
+sh -c "echo \"Authentication=VncAuth\" > /root/.vnc/config.d/vncserver-x11"
+echo "\n\nEnter vnc password"
+vncpasswd -service
+
+#Install extras
+apt-get install xscreensaver dnsmasq
+#apt-get install ffmpeg audacity youtube-dl python-dev
