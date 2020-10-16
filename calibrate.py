@@ -52,7 +52,8 @@ def rgb_to_hex(rgb) -> str:
 #
 # Main Loop.
 #
-def mainLoop(stdscr: curses.window, appgui: App):
+def mainLoop(stdscr, appgui):
+    #FIXME: def mainLoop(stdscr: curses.window, appgui: App):
     # rgbBox: Drawing
     # rgbRect: Drawing
 
