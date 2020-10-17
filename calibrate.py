@@ -34,9 +34,10 @@ def refreshWinStatus():
     console.winStatus.refresh()
 
     console.winStatus2.clear()
-    console.winStatus2.addstr(1, 1, 'PWM: {}'.format(console.cfg.pwm))
-    console.winStatus2.addstr(3, 1, 'Y,R,G,B,W,X')
-    console.winStatus2.addstr(4, 1, 'y,u,i,o,p,[')
+    console.winStatus2.addstr(1, 1, 'PWM: {Hz} Hz - {step}'.format(**console.cfg.pwm))
+    console.winStatus2.addstr(2, 1, 'Mix: {R}, {G}, {B}, {W}'.format(**console.cfg.mix))
+    console.winStatus2.addstr(3, 1, 'Min: {R}, {G}, {B}, {W}'.format(**console.cfg.min))
+    console.winStatus2.addstr(5, 1, 'Y,R,G,B,W,X - y,u,i,o,p,[')
     console.winStatus2.box()
     console.winStatus2.addstr(0, 1, 'Controls', curses.color_pair(1))
     console.winStatus2.refresh()
@@ -53,21 +54,23 @@ def rgb_to_hex(rgb) -> str:
 # Main Loop.
 #
 def mainLoop(stdscr, appgui):
-    #FIXME: def mainLoop(stdscr: curses.window, appgui: App):
+    # FIXME: def mainLoop(stdscr: curses.window, appgui: App):
     # rgbBox: Drawing
     # rgbRect: Drawing
 
+
     # Setup Curses TUI
-    curses.resizeterm(33, 80)
+    curses.resizeterm(30, 80)
     curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_WHITE)
 
     stdscr.nodelay(True)
+    stdscr.refresh()
 
-    console.winStatus = curses.newwin(6, 40, 0, 0)
-    console.winStatus2 = curses.newwin(6, 40, 0, 40)
+    console.winStatus = curses.newwin(7, 40, 0, 0)
+    console.winStatus2 = curses.newwin(7, 40, 0, 40)
     refreshWinStatus()
 
-    console.winConsole = curses.newwin(26, 60, 6, 10)
+    console.winConsole = curses.newwin(22, 60, 7, 10)
     console.winConsole.scrollok(True)
 
     # Run System Init
@@ -85,10 +88,11 @@ def mainLoop(stdscr, appgui):
     (r, g, b, w) = (0, 0, 0, 0)
     adjust = True
     vworp = True
+    curses.flushinp()
 
     # Event Loop
     while vworp:
-        time.sleep(0.1)
+        time.sleep(console.cfg.loopSleep)
 
         # Keep values within bounds
         console.cfg.gamma = min(5.0, max(0.1, console.cfg.gamma))
@@ -147,7 +151,7 @@ def mainLoop(stdscr, appgui):
         elif k == ord(';'):
             w -= 1
         elif k == ord('6'):
-            console.cfg.gamma = 1
+            console.cfg.gamma = 2.8
         elif k == ord('7'):
             r += 128 if r < 255 else -256
         elif k == ord('8'):

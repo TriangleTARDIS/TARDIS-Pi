@@ -4,9 +4,14 @@
   "debug": false,
   "hostName": "tardispi",
   "autoPilot": false,
-  "__devName": "Compx 2.4G Receiver",
-  "devName": "Logitech USB Receiver",
+  "_devName": "Compx 2.4G Receiver",
+  "devName": "Logitech Wireless Mouse",
   "dirSound": "sound/",
+  "spin": [
+    "⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿",
+    "◴◷◶◵◐◓◑◒"
+  ],
+  "loopSleep": 0.1,
   "pwm": {
     "Hz": 1200,
     "step": 255
@@ -23,5 +28,11 @@
     "G": 6.0,
     "B": 1.0,
     "W": 1.0
+  },
+  "min": {
+    "R": 3,
+    "G": 7,
+    "B": 2,
+    "W": 3
   }
 }

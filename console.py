@@ -109,6 +109,14 @@ def refreshWinStatus():
 
 
 #
+# Spinners!
+# https://stackoverflow.com/questions/2685435/cooler-ascii-spinners
+#
+def spin(t, display=0) -> str:
+    return cfg.spin[display][t % len(cfg.spin[display])]
+
+
+#
 # Play a wave file.
 #
 # FIXME: Implement blocking.
@@ -146,11 +154,10 @@ def gammaShift(lvl) -> int:
 
 #
 # PWM Set Duty Cycle (with gamma correction).
-# FIXME: Gamma controls.
 #
 def setPwmDutyCycle(pin, lvl, adjust=True):
     if pin is not None and pin > 0:
-        # FIXME: Adjust RGBW per channel.
+        # FIXME: Adjust RGBW per channel with minimums.
         if adjust:
             lvla = gammaShift(lvl)
         else:
@@ -163,7 +170,6 @@ def setPwmDutyCycle(pin, lvl, adjust=True):
 # Begin PWM.
 #
 def beginPWM():
-    # fullBright()
     statusPrint(3, 'Begin PWM.')
 
     for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
@@ -180,8 +186,6 @@ def endPWM():
 
     for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
         setPwmDutyCycle(pin, cfg.pwm.step)
-
-    # fullBright()
 
 
 #
@@ -217,7 +221,7 @@ def effectPulse(f, pwmSleep=pwmSleepDefault):
     i = 0
     while play.is_playing():
         lvla = int(cfg.pwm.step * 0.5 * ((math.cos((i / cfg.pwm.step) * 2 * math.pi)) + 1))
-        statusPrint(4, 'Level: {:6g} of {:6g}'.format(lvla, cfg.pwm.step))
+        statusPrint(4, 'Level: {} {:6g} of {:6g}'.format(spin(i, 1), lvla, cfg.pwm.step))
 
         for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
             setPwmDutyCycle(pin, lvla)
@@ -242,7 +246,7 @@ def effectPulseRGB(f, pwmSleep=pwmSleepDefault, rand=False):
     i = 0
     while play.is_playing():
         (lR, lG, lB) = nthcolor(i) if rand else sinebow(i / cfg.pwm.step)
-        statusPrint(4, 'Level: {:6g} - [{:3g}, {:3g}, {:3g}]'.format(i, lR, lG, lB))
+        statusPrint(4, 'Level: {} {:6g} - [{:3g}, {:3g}, {:3g}]'.format(spin(i, 1), i, lR, lG, lB))
 
         setPwmDutyCycle(cfg.bcmPin.R, lR)
         setPwmDutyCycle(cfg.bcmPin.G, lG)
@@ -322,19 +326,19 @@ def mainLoop(stdscr):
     global winStatus2
 
     # Setup Curses TUI
-    curses.resizeterm(33, 80)
+    curses.resizeterm(30, 80)
     curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_WHITE)
 
     stdscr.nodelay(True)
-    # for l in range(0, 32):
+    # for l in range(0, 29):
     #    stdscr.addstr(l, 0, str(l).rjust(80, '*'))
-    # stdscr.refresh()
+    stdscr.refresh()
 
-    winStatus = curses.newwin(6, 40, 0, 0)
-    winStatus2 = curses.newwin(6, 40, 0, 40)
+    winStatus = curses.newwin(7, 40, 0, 0)
+    winStatus2 = curses.newwin(7, 40, 0, 40)
     refreshWinStatus()
 
-    winConsole = curses.newwin(26, 60, 6, 10)
+    winConsole = curses.newwin(22, 60, 7, 10)
     winConsole.scrollok(True)
 
     # Run System Init
@@ -375,13 +379,15 @@ def mainLoop(stdscr):
     else:
         conPrint('Found Operator! [' + gp.name + ']')
         gp.grab()
+        curses.flushinp()
 
         r = 0
-        rf = 0
+        rf = 10
         vworp = True
 
         while vworp:
-            time.sleep(0.1)
+            time.sleep(cfg.loopSleep)
+            statusPrint(4, 'Frame: {} {} {}'.format(spin(r), r, rf if autoPilot else ''), 1)
             ranEvent = False
             event = gp.read_one()
             curseKey = stdscr.getch()
@@ -389,8 +395,7 @@ def mainLoop(stdscr):
             # Autopilot Injects Events periodically
             if autoPilot and (r >= rf):
                 r = 0
-                rf = (random.randint(10, 60)) * 100
-                conPrint('Next Wait: ' + str(rf))
+                rf = (random.randint(10, 60)) * math.trunc(1 / cfg.loopSleep)
                 event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
 
             # Handle Event
@@ -436,7 +441,7 @@ def mainLoop(stdscr):
                 elif kCode == 'DOWN' or kCode == 'y':
                     effectPulseRGB('denied_takeoff.wav', pwmSleepDefault * 1.5)
                     ranEvent = True
-                elif kCode == 'q':
+                elif kCode == 'KEY_Q' or kCode == 'q':
                     vworp = False
                 elif kCode is not None:
                     debugPrint('Unused Key: ' + str(kCode))
@@ -454,6 +459,7 @@ def mainLoop(stdscr):
             # endif
 
             r += 1
+            r %= 4000
         # endWhile
 
 

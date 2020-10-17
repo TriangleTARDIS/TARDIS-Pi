@@ -23,7 +23,7 @@ echo Audio Interface Activated...
 
 # Startup background sound
 killall -q speaker-test
-speaker-test -W ./sound -t wav -w hum_mono.wav -l 0 > /dev/null &
+nohup speaker-test -W ./sound -t wav -w hum_mono.wav -l 0 > /dev/null &
 
 # Activate gpio daemon
 sudo pigpiod
