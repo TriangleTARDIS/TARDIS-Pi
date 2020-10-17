@@ -37,16 +37,20 @@ echo "Bring Up Ethernet..."
 sudo ifconfig $eth down
 sudo ifconfig $eth $ip_address netmask $netmask
 # Remove default route created by dhcpcd
-sudo ip route del 0/0 dev $eth &> /dev/null
+#sudo ip route del 0/0 dev $eth &> /dev/null
 
 echo "Restart DNSMasq..."
 sudo systemctl stop dnsmasq
-sudo rm -rf /etc/dnsmasq.d/custom-dnsmasq.conf &> /dev/null
-echo -e "interface=$eth\nbind-interfaces\nserver=8.8.8.8\ndomain-needed\nbogus-priv\ndhcp-range=$dhcp_range_start,$dhcp_range_end,$dhcp_time" > /tmp/custom-dnsmasq.conf
+sudo rm -rf /etc/dnsmasq.d/custom-dnsmasq.conf
+printf "interface=$eth\nbind-interfaces\nserver=8.8.8.8\ndomain-needed\nbogus-priv\ndhcp-range=$dhcp_range_start,$dhcp_range_end,$dhcp_time\n" > /tmp/custom-dnsmasq.conf
 sudo cp /tmp/custom-dnsmasq.conf /etc/dnsmasq.d/custom-dnsmasq.conf
-ls -lart /etc/dnsmasq.d
+echo
+ls -lart /etc/dnsmasq.d/*.conf
+echo
 cat /etc/dnsmasq.d/custom-dnsmasq.conf
+echo
 sudo systemctl start dnsmasq
 
 echo "Done."
+sleep 2
 
