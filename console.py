@@ -5,11 +5,11 @@
 # Copyright (C) 2017-2020 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 10-13-2020
+# Last modified 10-20-2020
 #
 
 
-__version__ = '4.1.0'
+__version__ = '4.1.1'
 
 import curses
 import json
@@ -46,6 +46,9 @@ winStatus = None
 winStatus2 = None
 winConsole = None
 log = None
+pinNames = None
+levelIn = None
+levelOut = None
 
 
 #
@@ -135,7 +138,7 @@ def initGPIO():
 
 
 #
-# Reset LEDs to full bright.
+# Reset LEDs to full bright (or dark).
 #
 def fullBright(lvl=0):
     statusPrint(3, 'Full Bright.')
@@ -155,15 +158,29 @@ def gammaShift(lvl) -> int:
 #
 # PWM Set Duty Cycle (with gamma correction).
 #
-def setPwmDutyCycle(pin, lvl, adjust=True):
-    if pin is not None and pin > 0:
-        # FIXME: Adjust RGBW per channel with minimums.
-        if adjust:
-            lvla = gammaShift(lvl)
-        else:
-            lvla = lvl
+def setPwmDutyCycle(pinName, lvl, adjust=True) -> int:
+    global levelIn
+    global levelOut
 
-        piGPIO.set_PWM_dutycycle(pin, cfg.pwm.step - lvla)
+
+    pin = cfg.bcmPin[pinName]
+    mixl = cfg.mix[pinName]
+    minl = cfg.min[pinName]
+    levelIn[pinName] = lvl
+
+    if pin is not None and pin > 0:
+        lvla = lvl
+
+        if adjust:
+            lvla = gammaShift(lvla)
+            lvla = lvla * mixl
+            # FIXME: Scale to min.
+
+        levelOut[pinName] = round(min(cfg.pwm.step, max(0, lvla)))
+        piGPIO.set_PWM_dutycycle(pin, cfg.pwm.step - levelOut[pinName])
+        return levelOut[pinName]
+    else:
+        return levelOut[pinName]
 
 
 #
@@ -184,8 +201,8 @@ def beginPWM():
 def endPWM():
     statusPrint(3, 'End PWM.')
 
-    for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
-        setPwmDutyCycle(pin, cfg.pwm.step)
+    for pinName in cfg.bcmPin.keys():
+        setPwmDutyCycle(pinName, cfg.pwm.step)
 
 
 #
@@ -223,8 +240,8 @@ def effectPulse(f, pwmSleep=pwmSleepDefault):
         lvla = int(cfg.pwm.step * 0.5 * ((math.cos((i / cfg.pwm.step) * 2 * math.pi)) + 1))
         statusPrint(4, 'Level: {} {:6g} of {:6g}'.format(spin(i, 1), lvla, cfg.pwm.step))
 
-        for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
-            setPwmDutyCycle(pin, lvla)
+        for pinName in cfg.bcmPin.keys():
+            setPwmDutyCycle(pinName, lvla)
 
         time.sleep(pwmSleep)
         i = i + 1
@@ -241,16 +258,16 @@ def effectPulseRGB(f, pwmSleep=pwmSleepDefault, rand=False):
     conPrint('PulseRGB: ' + f)
     play = playSound(f)
     beginPWM()
-    setPwmDutyCycle(cfg.bcmPin.W, 0)
+    setPwmDutyCycle('W', 0)
 
     i = 0
     while play.is_playing():
         (lR, lG, lB) = nthcolor(i) if rand else sinebow(i / cfg.pwm.step)
         statusPrint(4, 'Level: {} {:6g} - [{:3g}, {:3g}, {:3g}]'.format(spin(i, 1), i, lR, lG, lB))
 
-        setPwmDutyCycle(cfg.bcmPin.R, lR)
-        setPwmDutyCycle(cfg.bcmPin.G, lG)
-        setPwmDutyCycle(cfg.bcmPin.B, lB)
+        setPwmDutyCycle('R', lR)
+        setPwmDutyCycle('G', lG)
+        setPwmDutyCycle('B', lB)
 
         time.sleep(pwmSleep)
         i = i + 1
@@ -268,10 +285,11 @@ def effectBlink(f):
     play = playSound(f)
     beginPWM()
 
-    for lvl in [cfg.pwm.step, 0, cfg.pwm.step * 0.25, cfg.pwm.step, 0, cfg.pwm.step * 0.25, cfg.pwm.step]:
+    for lvl in [1, 0, 0.25, 1, 0, 0.25, 1]:
+        lvl *= cfg.pwm.step
         statusPrint(4, 'Level: {:6g} of {:6g}'.format(lvl, cfg.pwm.step))
 
-        for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+        for pin in cfg.bcmPin.values():
             piGPIO.set_PWM_dutycycle(pin, lvl)
 
         time.sleep(0.1)
@@ -472,15 +490,22 @@ def mainLoop(stdscr):
 def readConfig():
     global cfg
     global pwmSleepDefault
+    global pinNames
+    global levelIn
+    global levelOut
 
     with open('console_config.json') as f:
         cfg = munch.munchify(json.load(f))
 
     pwmSleepDefault = 1 / cfg.pwm.step
+    pinNames = list(cfg.bcmPin.keys())
+    levelIn = dict.fromkeys(cfg.bcmPin.keys())
+    levelOut = dict.fromkeys(cfg.bcmPin.keys())
 
     log.info(cfg)
     log.debug("Debug: %s", cfg.debug)
-    log.debug("Pins: R:%s G:%s B:%s W:%s", cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W)
+    log.debug("Names: %s", pinNames)
+    log.debug("Pins : %s", cfg.bcmPin)
     log.debug("PWM Sleep: %s", pwmSleepDefault)
 
 
