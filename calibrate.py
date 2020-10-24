@@ -5,7 +5,7 @@
 # Copyright (C) 2017-2020 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 10-21-2020
+# Last modified 10-23-2020
 #
 
 
@@ -81,9 +81,9 @@ def mainLoop(stdscr, appgui):
     console.beginPWM()
 
     # Setup GUI
-    m1 = 20
-    m2 = 10
-    rgbBox = Drawing(master=appgui, width=appgui.width, height=m2 * 4, align='top')
+    m1 = 40
+    m2 = 15
+    rgbBox = Drawing(master=appgui, width=appgui.width, height=m2 * 3, align='top')
     sliderHue = Slider(master=appgui, width=appgui.width, end=360)
     sliderSat = Slider(master=appgui, width=appgui.width, end=100)
     sliderVal = Slider(master=appgui, width=appgui.width, end=100)
@@ -109,7 +109,7 @@ def mainLoop(stdscr, appgui):
 
     # Event Loop
     while vworp:
-        #time.sleep(console.cfg.loopSleep / 25)
+        time.sleep(console.cfg.loopSleep / 25)
 
         # Pull values from sliders
         (h, s, v) = (int(sliderHue.value) / 360, int(sliderSat.value) / 100, int(sliderVal.value) / 100)
@@ -121,49 +121,68 @@ def mainLoop(stdscr, appgui):
         mixW = float(sliderWx.value) / 100
 
         # Keep values within bounds
-        adjust = adjust % 3
+        adjust = adjust % 4
 
         # Gamma shift controls
         (rl, gl, bl, wl) = (r, g, b, w)
 
+        # Mode 0: No adjustment
+        # Mode 1: Calibrate
+        # Mode 2: Console/Calibrate
+        # Mode 3: Console Only
+        # Mode 2 and 3 should always match, Mode 1 will match until the RGBW mix is changed
         if adjust == 1:
             (rl, gl, bl, wl) = (r, g, b, w)
-            rl = console.gammaShift(rl)
-            gl = console.gammaShift(gl)
-            bl = console.gammaShift(bl)
+            rl = console.gammaShift(rl) * mixR
+            gl = console.gammaShift(gl) * mixG
+            bl = console.gammaShift(bl) * mixB
 
-            rl = round(rl * mixR)
-            gl = round(gl * mixG)
-            bl = round(bl * mixB)
-
-            # White Blend, gamma shift??
-            # https://blog.athrunen.dev/experimenting-with-efficiently-combining-rgb-and-true-white/
             if mixW > 0:
-                rgbl = [rl,gl,bl]
+                rgbl = [rl, gl, bl]
                 index = rgbl.index(min(rgbl))
-                wl = round(rgbl[index] * mixW);
-                rgbl[index] = round(rgbl[index] * (1 - mixW));
+                wl = rgbl[index] * mixW
+                rgbl[index] = rgbl[index] * (1 - mixW)
                 [rl, gl, bl] = rgbl
 
+            rl = round(rl)
+            gl = round(gl)
+            bl = round(bl)
+            wl = round(wl)
+
+        if adjust == 2:
+            console.levelIn['R'] = r
+            console.levelIn['G'] = g
+            console.levelIn['B'] = b
+            console.levelIn['W'] = w
+            console.levelIn = console.colorShift(console.levelIn)
+            (rl, gl, bl, wl) = console.levelIn.values()
+
         # Setup PWM
-        rl2 = console.setPwmDutyCycle('R', rl, adjust == 2)
-        gl2 = console.setPwmDutyCycle('G', gl, adjust == 2)
-        bl2 = console.setPwmDutyCycle('B', bl, adjust == 2)
-        wl2 = console.setPwmDutyCycle('W', wl, adjust == 2)
+        if adjust < 3:
+            console.setPwmDutyCycle('R', rl, False)
+            console.setPwmDutyCycle('G', gl, False)
+            console.setPwmDutyCycle('B', bl, False)
+            console.setPwmDutyCycle('W', wl, False)
+        else:
+            console.levelIn['R'] = r
+            console.levelIn['G'] = g
+            console.levelIn['B'] = b
+            console.levelIn['W'] = w
+            console.setPwmRgbw(console.levelIn)
 
         # Update TUI/GUI
         console.statusPrint(1, 'Gamma: {:1.2f}   Adj Mode: {}'.format(console.cfg.gamma, adjust))
         console.statusPrint(2, 'RGBW : {}, {}, {}, {}'.format(r, g, b, w))
         console.statusPrint(3, 'RGBWi: {}'.format(list(str(value) for value in console.levelIn.values())))
-        console.statusPrint(4, 'RGBWo: {}, {}, {}, {}'.format(rl2, gl2, bl2, wl2))
+        console.statusPrint(4, 'RGBWo: {}'.format(list(str(value) for value in console.levelOut.values())))
         console.statusPrint(5, 'HSV  : {:1.0f}, {:1.0f}, {:1.0f}'.format(h * 360, s * 100, v * 100))
 
         try:
+            (rl2, gl2, bl2, wl2) = console.levelOut.values()
             rgbBox.clear()
             rgbBox.rectangle(0, 0, appgui.width, m2, rgb_to_hex((r, g, b)))
             rgbBox.rectangle(m1, m2, appgui.width - m1, m2 * 2, rgb_to_hex((rl, gl, bl)))
             rgbBox.rectangle(m1 * 2, m2 * 2, appgui.width - m1 * 2, m2 * 4, rgb_to_hex((rl2, gl2, bl2)))
-            rgbBox.rectangle(0, m2 * 3, appgui.width, m2 * 4, rgb_to_hex((wl, wl, wl)))
         except BaseException as e:
             console.log.critical('GUI setup failed.', exc_info=sys.exc_info())
             raise

@@ -5,7 +5,7 @@
 # Copyright (C) 2017-2020 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 10-20-2020
+# Last modified 10-23-2020
 #
 
 
@@ -95,8 +95,8 @@ def statusPrint(line, s, win=0):
 #
 def refreshWinStatus():
     winStatus.clear()
-    winStatus.addstr(1, 1, 'Auto: {} '.format(autoPilot))
-    winStatus.addstr(2, 1, 'Term: {} '.format(curses.has_colors()))
+    winStatus.addstr(1, 1, 'Autonomous: {} '.format(autoPilot))
+    winStatus.addstr(2, 1, 'Coordinate: {} '.format(list(levelIn.values())))
     winStatus.box()
     winStatus.addstr(0, 1, 'TT40 Console', curses.color_pair(1))
     winStatus.refresh()
@@ -143,8 +143,11 @@ def initGPIO():
 def fullBright(lvl=0):
     statusPrint(3, 'Full Bright.')
 
-    for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+    for n in cfg.bcmPin.keys():
+        pin = cfg.bcmPin[n]
+
         if pin is not None:
+            levelIn[n] = cfg.pwm.step
             piGPIO.write(pin, lvl)
 
 
@@ -156,31 +159,64 @@ def gammaShift(lvl) -> int:
 
 
 #
-# PWM Set Duty Cycle (with gamma correction).
+# Gamma Shift RGB then apply Color Mix with optional White Mix to product RGBW.
+#
+def colorShift(colors):
+    cgs = {k: gammaShift(v) for (k, v) in colors.items()}
+    cgsM = {k: (cgs[k] * v) for k, v in cfg.mix.items()}
+
+    # White Mix, gamma shift??
+    # https://blog.athrunen.dev/experimenting-with-efficiently-combining-rgb-and-true-white/
+    if cfg.mix.W > 0:
+        rgb = {k: v for k, v in cgsM.items() if k != 'W'}
+        mink = min(rgb, key=rgb.get)
+        cgsM['W'] = rgb[mink] * cfg.mix.W
+        cgsM[mink] = cgsM[mink] * (1 - cfg.mix.W)
+
+    cgsM = {k: round(min(cfg.pwm.step, max(0, v))) for k, v in cgsM.items()}
+    return cgsM
+
+
+#
+# PWM Set Duty Cycle (with optional gamma correction).
 #
 def setPwmDutyCycle(pinName, lvl, adjust=True) -> int:
     global levelIn
     global levelOut
 
-
     pin = cfg.bcmPin[pinName]
     mixl = cfg.mix[pinName]
-    minl = cfg.min[pinName]
+    # FIXME: Scale to min.
+    # minl = cfg.min[pinName]
     levelIn[pinName] = lvl
 
     if pin is not None and pin > 0:
-        lvla = lvl
-
-        if adjust:
-            lvla = gammaShift(lvla)
-            lvla = lvla * mixl
-            # FIXME: Scale to min.
-
+        lvla = gammaShift(lvl) * mixl if adjust else lvl
         levelOut[pinName] = round(min(cfg.pwm.step, max(0, lvla)))
         piGPIO.set_PWM_dutycycle(pin, cfg.pwm.step - levelOut[pinName])
-        return levelOut[pinName]
-    else:
-        return levelOut[pinName]
+
+    return levelOut[pinName]
+
+
+#
+# Set PWM Duty Cycle for RGBW channels (with optional color correction).
+#
+def setPwmRgbw(colors, adjust=True):
+    global levelIn
+    global levelOut
+
+    levelIn = colors
+
+    if adjust:
+        colors = colorShift(colors)
+
+    for pinName in cfg.bcmPin.keys():
+        pin = cfg.bcmPin[pinName]
+        # FIXME: Scale to min.
+        # minl = cfg.min[pinName]
+        setPwmDutyCycle(pinName, colors[pinName], False)
+
+    return levelOut
 
 
 #
@@ -189,7 +225,7 @@ def setPwmDutyCycle(pinName, lvl, adjust=True) -> int:
 def beginPWM():
     statusPrint(3, 'Begin PWM.')
 
-    for pin in [cfg.bcmPin.R, cfg.bcmPin.G, cfg.bcmPin.B, cfg.bcmPin.W]:
+    for pin in cfg.bcmPin.values():
         if pin is not None:
             piGPIO.set_PWM_frequency(pin, cfg.pwm.Hz)
             piGPIO.set_PWM_range(pin, cfg.pwm.step)
@@ -247,7 +283,6 @@ def effectPulse(f, pwmSleep=pwmSleepDefault):
         i = i + 1
 
     endPWM()
-    statusPrint(4, '')
     conPrint('All Stop')
 
 
@@ -258,22 +293,18 @@ def effectPulseRGB(f, pwmSleep=pwmSleepDefault, rand=False):
     conPrint('PulseRGB: ' + f)
     play = playSound(f)
     beginPWM()
-    setPwmDutyCycle('W', 0)
 
-    i = 0
+    i = int(cfg.pwm.step * 0.5)
     while play.is_playing():
-        (lR, lG, lB) = nthcolor(i) if rand else sinebow(i / cfg.pwm.step)
-        statusPrint(4, 'Level: {} {:6g} - [{:3g}, {:3g}, {:3g}]'.format(spin(i, 1), i, lR, lG, lB))
-
-        setPwmDutyCycle('R', lR)
-        setPwmDutyCycle('G', lG)
-        setPwmDutyCycle('B', lB)
+        (levelIn['R'], levelIn['G'], levelIn['B']) = nthcolor(i) if rand else sinebow(i / cfg.pwm.step)
+        statusPrint(4, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}]'.format(spin(i, 1), i, **levelIn))
+        setPwmRgbw(levelIn)
+        statusPrint(5, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelOut))
 
         time.sleep(pwmSleep)
         i = i + 1
 
     endPWM()
-    statusPrint(4, '')
     conPrint('All Stop')
 
 
@@ -295,7 +326,6 @@ def effectBlink(f):
         time.sleep(0.1)
 
     endPWM()
-    statusPrint(4, '')
     conPrint('Locked')
 
 
@@ -388,26 +418,29 @@ def mainLoop(stdscr):
             gp = evdev.InputDevice(device.path)
             break
 
-    if autoPilot and (gp is None):
-        gp = evdev.InputDevice('/dev/input/event0')
+    # if autoPilot and (gp is None):
+    #    gp = evdev.InputDevice('/dev/input/event0')
 
     # Event Loop
     if not autoPilot and (gp is None):
         raise Exception('Operator Missing!')
     else:
-        conPrint('Found Operator! [' + gp.name + ']')
-        gp.grab()
-        curses.flushinp()
+        if gp is None:
+            conPrint('Operator Missing, Autonomous Control active.')
+        else:
+            conPrint('Found Operator! [' + gp.name + ']')
+            gp.grab()
 
         r = 0
-        rf = 10
+        rf = 4000
         vworp = True
+        curses.flushinp()
 
         while vworp:
             time.sleep(cfg.loopSleep)
-            statusPrint(4, 'Frame: {} {} {}'.format(spin(r), r, rf if autoPilot else ''), 1)
+            statusPrint(4, 'Frame: {} {} <{}>'.format(spin(r), r, rf if autoPilot else ''), 1)
             ranEvent = False
-            event = gp.read_one()
+            event = gp.read_one() if gp is not None else None
             curseKey = stdscr.getch()
 
             # Autopilot Injects Events periodically
@@ -422,7 +455,7 @@ def mainLoop(stdscr):
                 kCode = None
 
                 if autoPilot and r == 0:
-                    conPrint('Automatic action')
+                    conPrint('Autonomous action')
                     kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN'])
                 else:
                     conPrint('Normal action')
@@ -441,7 +474,7 @@ def mainLoop(stdscr):
 
                 if kCode is not None:
                     r = 0
-                    statusPrint(4, 'KEY: ' + kCode)
+                    statusPrint(4, 'Key: ' + kCode)
 
                 # Run Effect
                 if kCode == 'BTN_LEFT' or kCode == 'w':
@@ -457,7 +490,7 @@ def mainLoop(stdscr):
                     effectPulseRGB('cloister_bell.wav', pwmSleepDefault * 50, True)
                     ranEvent = True
                 elif kCode == 'DOWN' or kCode == 'y':
-                    effectPulseRGB('denied_takeoff.wav', pwmSleepDefault * 1.5)
+                    effectPulseRGB('denied_takeoff.wav', pwmSleepDefault * 4)
                     ranEvent = True
                 elif kCode == 'KEY_Q' or kCode == 'q':
                     vworp = False
@@ -470,7 +503,7 @@ def mainLoop(stdscr):
                     curses.flushinp()
                     curses.doupdate()
 
-                    while gp.read_one() is not None:
+                    while gp is not None and gp.read_one() is not None:
                         pass
 
                 fullBright()
