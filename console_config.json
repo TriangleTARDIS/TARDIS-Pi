@@ -12,31 +12,24 @@
     "◴◷◶◵◐◓◑◒"
   ],
   "loopSleep": 0.1,
-  "pwm": {
-    "Hz": 1200,
-    "step": 255
-  },
-  "bcmPin": {
-    "R": 6,
-    "G": 5,
-    "B": 13,
-    "W": 19
-  },
+  "pwm": {"Hz": 1200, "step": 255},
+  "fadeStep": 60,
+  "bcmPin": {"R": 6, "G": 5, "B": 13, "W": 19},
   "gamma": 2.4,
-  "mix": {
-    "R": 1.0,
-    "G": 0.65,
-    "B": 0.4,
-    "W": 0.3
-  },
-  "min": {
-    "R": 3,
-    "G": 7,
-    "B": 2,
-    "W": 3
-  },
+  "mix": {"R": 1.0, "G": 0.65, "B": 0.4, "W": 0.0},
+  "min": {"R": 3, "G": 7, "B": 2, "W": 3},
   "patterns": {
-    "halloween": ["#000000","#FC4605","#EA0C0C","#FFFFFF","#940194","#3FAB43"],
+    "halloween1": ["#404040","#FF7F00","#EA0C0C","#7F7F7F","#940194","#3FAB43"],
+    "halloween2": ["#810806","#BF200E","#FA4113","#FE9B13","#F9C10E","#FC1009","#000000","#404040","#FF7F00","#EA0C0C","#7F7F7F","#940194","#3FAB43"],
     "flag": ["#000000","#FF0000","#FFFFFF","#0000FF"]
+  },
+  "effects": {
+    "random": {"slow": 50, "pattern": "random", "fade": false},
+    "sinebow": {"slow": 4, "pattern": "sinebow", "fade": false},
+    "halloween1.0": {"slow": 50, "pattern": "halloween1", "fade": false},
+    "halloween1.1": {"slow": 50, "pattern": "halloween1", "fade": true},
+    "halloween2.0": {"slow": 50, "pattern": "halloween2", "fade": false},
+    "halloween2.1": {"slow": 50, "pattern": "halloween2", "fade": true},
+    "flag": {"slow": 75, "pattern": "flag", "fade": false}
   }
 }

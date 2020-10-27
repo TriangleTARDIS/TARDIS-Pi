@@ -287,16 +287,55 @@ def effectPulse(f, pwmSleep=pwmSleepDefault):
 
 
 #
+# Convert RGB Hex string to RGB Tuple.
+#
+def hexToRGB(h):
+    return tuple(c for c in bytes.fromhex(h[1:]))
+
+
+#
+# Return RGB used to color fade from one color to the next in pattern.
+#
+def colorFade(p, i):
+    j = int(i / cfg.fadeStep % len(p))
+    s = i % cfg.fadeStep
+    c1 = hexToRGB(p[j])
+    c2 = hexToRGB(p[(j + 1) % len(p)])
+    (r, g, b) = (int((c2[c] - c1[c]) / cfg.fadeStep * s) + c1[c] for c in range(3))
+    return r, g, b
+
+
+#
+# Return RGB used for the named effect.
+#
+def colorPattern(effect, i):
+    name = effect.pattern
+    fade = effect.fade
+
+    if name == 'sinebow':
+        return sinebow(i / cfg.pwm.step)
+    elif name == 'random':
+        return nthcolor(i)
+    else:
+        p = cfg.patterns[name]
+        return colorFade(p, i) if fade else hexToRGB(p[i % len(p)])
+
+
+#
 # Pulse Lights RGB effect.
 #
-def effectPulseRGB(f, pwmSleep=pwmSleepDefault, rand=False):
-    conPrint('PulseRGB: ' + f)
-    play = playSound(f)
+def effectPulseRGB(sound, name='sinebow'):
+    conPrint('PulseRGB: {} - {}'.format(name, sound))
+    play = playSound(sound)
     beginPWM()
 
-    i = int(cfg.pwm.step * 0.5)
+    effect = cfg.effects[name]
+    slow = effect.slow / cfg.fadeStep if effect.fade else effect.slow
+    pwmSleep = pwmSleepDefault * slow
+    i = 0
+
     while play.is_playing():
-        (levelIn['R'], levelIn['G'], levelIn['B']) = nthcolor(i) if rand else sinebow(i / cfg.pwm.step)
+        (levelIn['R'], levelIn['G'], levelIn['B']) = colorPattern(effect, i)
         statusPrint(4, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}]'.format(spin(i, 1), i, **levelIn))
         setPwmRgbw(levelIn)
         statusPrint(5, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelOut))
@@ -313,7 +352,7 @@ def effectPulseRGB(f, pwmSleep=pwmSleepDefault, rand=False):
 #
 def effectBlink(f):
     conPrint('Lock: ' + f)
-    play = playSound(f)
+    playSound(f)
     beginPWM()
 
     for lvl in [1, 0, 0.25, 1, 0, 0.25, 1]:
@@ -432,7 +471,7 @@ def mainLoop(stdscr):
             gp.grab()
 
         r = 0
-        rf = 4000
+        rf = 25
         vworp = True
         curses.flushinp()
 
@@ -456,7 +495,7 @@ def mainLoop(stdscr):
 
                 if autoPilot and r == 0:
                     conPrint('Autonomous action')
-                    kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN'])
+                    kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN', 'u', 'i'])
                 else:
                     conPrint('Normal action')
 
@@ -487,10 +526,18 @@ def mainLoop(stdscr):
                     effectPulse('exterior_telephone.wav', pwmSleepDefault)
                     ranEvent = True
                 elif kCode == 'UP' or kCode == 't':
-                    effectPulseRGB('cloister_bell.wav', pwmSleepDefault * 50, True)
+                    effectPulseRGB('cloister_bell.wav', 'random')
                     ranEvent = True
                 elif kCode == 'DOWN' or kCode == 'y':
-                    effectPulseRGB('denied_takeoff.wav', pwmSleepDefault * 4)
+                    effectPulseRGB('denied_takeoff.wav')
+                    ranEvent = True
+                elif kCode == 'u':
+                    # Test Effect
+                    effectPulseRGB('runaway_scanning.wav', 'halloween1.0')
+                    ranEvent = True
+                elif kCode == 'i':
+                    # Test Effect
+                    effectPulseRGB('runaway_scanning.wav', 'halloween2.1')
                     ranEvent = True
                 elif kCode == 'KEY_Q' or kCode == 'q':
                     vworp = False
