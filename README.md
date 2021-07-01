@@ -33,4 +33,10 @@ TODO
 * Fix focus in calibration GUI
 * Integration with IP Phone (effects on incomning call, etc.)
 
+
+Useful Links
+---
+* https://github.com/arpitjindal97/raspbian-recipes/blob/master/wifi-to-eth-route.sh
+* https://github.com/kgbplus/gpiotest
+
 ![Console](image/tardis_console.jpg)

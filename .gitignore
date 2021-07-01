@@ -102,3 +102,13 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+bpytop.py
+
+chroma.py
+
+chroma2.py
+
+testu2.py
+
+testurwid.py

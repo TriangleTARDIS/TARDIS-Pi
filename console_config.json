@@ -1,6 +1,6 @@
 {
   "__description__": "TARDIS-Pi Config File",
-  "__version__": "4.1.1",
+  "__version__": "4.1.2",
   "debug": false,
   "hostName": "tardispi",
   "autoPilot": false,
@@ -21,6 +21,22 @@
   "patterns": {
     "halloween1": ["#404040","#FF7F00","#EA0C0C","#7F7F7F","#940194","#3FAB43"],
     "halloween2": ["#810806","#BF200E","#FA4113","#FE9B13","#F9C10E","#FC1009","#000000","#404040","#FF7F00","#EA0C0C","#7F7F7F","#940194","#3FAB43"],
+    "christmas" : [
+"#AE1417",
+"#DB1C1A",
+"#2E5033",
+"#3E8B54",
+"#D8D8D8",
+"#F8D54C"
+],
+    "hanukkah": [
+"#002BFF",
+"#FFFFFF",
+"#002BFF",
+"#FFFFFF",
+"#F8D54C",
+"#A19898"
+],
     "flag": ["#000000","#FF0000","#FFFFFF","#0000FF"]
   },
   "effects": {
@@ -30,6 +46,8 @@
     "halloween1.1": {"slow": 50, "pattern": "halloween1", "fade": true},
     "halloween2.0": {"slow": 50, "pattern": "halloween2", "fade": false},
     "halloween2.1": {"slow": 50, "pattern": "halloween2", "fade": true},
+    "christmas": {"slow": 400, "pattern": "christmas", "fade": false},
+    "hanukkah": {"slow": 400, "pattern": "hanukkah", "fade": true},
     "flag": {"slow": 75, "pattern": "flag", "fade": false}
   }
 }
