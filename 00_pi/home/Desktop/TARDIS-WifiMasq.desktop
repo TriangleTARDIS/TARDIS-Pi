@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Wifi Masq
-Exec=/home/pi/TARDIS-Pi/00_pi/wifi-to-eth-route.sh
+Exec=/home/pi/TARDIS-Pi/00_pi/wifi-to-eth-up.sh
 Icon=lxterminal
 Type=Application
 Categories=GTK;Utility;TerminalEmulator;
