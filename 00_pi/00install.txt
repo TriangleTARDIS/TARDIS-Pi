@@ -3,8 +3,9 @@ TARDIS Pi Install
 
 Configuration
 -------------
-*Copy 00_pi/raspi-config.txt to SD Card /boot/
-*Create /boot/ssh.txt file
+*SD Card /boot/
+   *Copy 00_pi/raspi-config.txt
+   *Create empty ssh.txt
 *First Boot, SSH or console to host
    sudo env HNAME=hostName WNAME=wifiName WPWD=wifiPassword sh /boot/raspi-config.txt
 
@@ -18,4 +19,5 @@ Configuration
    *Configure audio if necessary
    *Run Calibration to verify LEDs
 
-*Copy config.txt to /boot for small panel (800x480)
+*Append config.txt.panel to /boot for small panel (800x480)
+
