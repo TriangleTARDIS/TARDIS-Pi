@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Calibration
-Exec=~/TARDIS-Pi/calibrate.py
+Exec=~/TARDIS-Pi/go_calibrate.sh
 Icon=style
 Type=Application
 Categories=GTK;Utility;TerminalEmulator;
