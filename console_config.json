@@ -1,9 +1,10 @@
 {
   "__description__": "TARDIS-Pi Config File",
-  "__version__": "4.1.2",
+  "__version__": "4.1.3",
   "debug": false,
   "hostName": "tardispi",
   "autoPilot": false,
+  "autoFreq": 25,
   "_devName": "Compx 2.4G Receiver",
   "devName": "Logitech Wireless Mouse",
   "dirSound": "sound/",
@@ -19,25 +20,12 @@
   "mix": {"R": 1.0, "G": 0.65, "B": 0.4, "W": 0.0},
   "min": {"R": 3, "G": 7, "B": 2, "W": 3},
   "patterns": {
-    "halloween1": ["#404040","#FF7F00","#EA0C0C","#7F7F7F","#940194","#3FAB43"],
-    "halloween2": ["#810806","#BF200E","#FA4113","#FE9B13","#F9C10E","#FC1009","#000000","#404040","#FF7F00","#EA0C0C","#7F7F7F","#940194","#3FAB43"],
-    "christmas" : [
-"#AE1417",
-"#DB1C1A",
-"#2E5033",
-"#3E8B54",
-"#D8D8D8",
-"#F8D54C"
-],
-    "hanukkah": [
-"#002BFF",
-"#FFFFFF",
-"#002BFF",
-"#FFFFFF",
-"#F8D54C",
-"#A19898"
-],
-    "flag": ["#000000","#FF0000","#FFFFFF","#0000FF"]
+    "halloween1": ["#404040", "#FF7F00", "#EA0C0C", "#7F7F7F", "#940194", "#3FAB43"],
+    "halloween2": ["#810806", "#BF200E", "#FA4113", "#FE9B13", "#F9C10E", "#FC1009", "#000000", "#404040", "#FF7F00", "#EA0C0C", "#7F7F7F", "#940194", "#3FAB43"],
+    "christmas" : ["#AE1417", "#DB1C1A", "#2E5033", "#3E8B54", "#D8D8D8", "#F8D54C"],
+    "hanukkah": ["#002BFF", "#FFFFFF", "#002BFF", "#FFFFFF", "#F8D54C", "#A19898"],
+    "mauveAlert": ["#E285FF", "#B784A7", "#673147", "#FF0000"],
+    "flag": ["#FF0000", "#AAAAAA", "#0000FF"]
   },
   "effects": {
     "random": {"slow": 50, "pattern": "random", "fade": false},
@@ -48,6 +36,7 @@
     "halloween2.1": {"slow": 50, "pattern": "halloween2", "fade": true},
     "christmas": {"slow": 400, "pattern": "christmas", "fade": false},
     "hanukkah": {"slow": 400, "pattern": "hanukkah", "fade": true},
-    "flag": {"slow": 75, "pattern": "flag", "fade": false}
+    "mauveAlert": {"slow": 50, "pattern": "mauveAlert", "fade": false},
+    "flag": {"slow": 175, "pattern": "flag", "fade": false}
   }
 }

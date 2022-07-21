@@ -2,14 +2,14 @@
 #
 # TARDIS SFX module.
 #
-# Copyright (C) 2017-2020 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2021 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 12-18-2020
+# Last modified 07-01-2021
 #
 
 
-__version__ = '4.1.2'
+__version__ = '4.1.3'
 
 import curses
 import json
@@ -40,6 +40,7 @@ import simpleaudio
 # log: logging.Logger = None
 cfg = None
 autoPilot = False
+autoFreq = None
 pwmSleepDefault = None
 piGPIO = None
 gp = None
@@ -334,33 +335,16 @@ def effectPulseRGB(sound, name='sinebow'):
     slow = effect.slow / cfg.fadeStep if effect.fade else effect.slow
     pwmSleep = pwmSleepDefault * slow
     i = 0
-    st = 0
-    st2 = 0
-    xbt = datetime.now()
 
     while play.is_playing():
-        bt = datetime.now()
         (levelIn['R'], levelIn['G'], levelIn['B']) = colorPattern(effect, i)
         statusPrint(4, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}]'.format(spin(i, 1), i, **levelIn))
         setPwmRgbw(levelIn)
         statusPrint(5, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelOut))
-        et = datetime.now()
-        dt = et - bt
-        st = st + dt.microseconds / 1000000
 
-        bt = datetime.now()
         time.sleep(pwmSleep)
-        et = datetime.now()
-        dt = et - bt
-        st2 = st2 + dt.microseconds / 1000000
         i = i + 1
 
-    xet = datetime.now()
-    xdt = xet - xbt
-    conPrint('Delay: {} {}s'.format(i, st / i))
-    conPrint('Delay: {} {}s'.format(i, st2 / i))
-    conPrint('Drift: {}us'.format((pwmSleep - (st2 / i)) * 1000000))
-    conPrint('Run: {}'.format(xdt))
     endPWM()
     conPrint('All Stop')
 
@@ -489,7 +473,7 @@ def mainLoop(stdscr):
             gp.grab()
 
         r = 0
-        rf = 25
+        rf = autoFreq
         vworp = True
         curses.flushinp()
 
@@ -551,11 +535,11 @@ def mainLoop(stdscr):
                     ranEvent = True
                 elif kCode == 'u':
                     # Test Effect
-                    effectPulseRGB('runaway_scanning.wav', 'christmas')
+                    effectPulseRGB('mummy.wav', 'mauveAlert')
                     ranEvent = True
                 elif kCode == 'i':
                     # Test Effect
-                    effectPulseRGB('runaway_scanning.wav', 'hanukkah')
+                    effectPulseRGB('runaway_scanning.wav', 'flag')
                     ranEvent = True
                 elif kCode == 'KEY_Q' or kCode == 'q':
                     vworp = False
@@ -587,6 +571,7 @@ def mainLoop(stdscr):
 #
 def readConfig():
     global cfg
+    global autoFreq
     global pwmSleepDefault
     global pinNames
     global levelIn
@@ -595,6 +580,7 @@ def readConfig():
     with open('console_config.json') as f:
         cfg = munch.munchify(json.load(f))
 
+    autoFreq = cfg.autoFreq
     pwmSleepDefault = 1 / cfg.pwm.step
     pinNames = list(cfg.bcmPin.keys())
     levelIn = dict.fromkeys(cfg.bcmPin.keys())
