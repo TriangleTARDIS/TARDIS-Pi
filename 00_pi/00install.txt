@@ -10,11 +10,12 @@ Configuration (2022)
    *Setup WiFi
 *Second Boot
    git clone https://github.com/TriangleTARDIS/TARDIS-Pi.git ~/TARDIS-Pi/
-   sudo env HNAME=hostName sh ~/TARDIS-Pi/00_pi/raspi-config.txt
+   sudo env HNAME=tardispi sh ~/TARDIS-Pi/00_pi/raspi-config.txt
 
    pip3 install -r ~/TARDIS-Pi/requirements.txt
    cp -rv ~/TARDIS-Pi/00_pi/home/. ~/
    sed -i'' "s/~/\/home\/$USER/" ~/Desktop/TARDIS-*.desktop
+   sed -i'' "s/~/\/home\/$USER/" ~/.config/pcmanfm/LXDE-pi/*.conf
 
    *Setup a screensaver
    *Configure audio if necessary

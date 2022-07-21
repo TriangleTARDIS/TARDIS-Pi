@@ -94,7 +94,7 @@ Plugin {
   }
 }
 Plugin {
-  type=volumealsabt
+  type=volume
   Config {
   }
 }
