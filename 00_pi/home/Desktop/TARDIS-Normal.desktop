@@ -1,10 +1,10 @@
 [Desktop Entry]
 Name=Normal Mode
-Exec=/home/pi/TARDIS-Pi/go_normal.sh
+Exec=~/TARDIS-Pi/go_normal.sh
 Icon=xscreensaver
 Type=Application
 Categories=GTK;Utility;TerminalEmulator;
 StartupNotify=true
 Terminal=true
 X-KeepTerminal=false
-Path=/home/pi/TARDIS-Pi/
+Path=~/TARDIS-Pi/

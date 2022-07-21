@@ -1,10 +1,10 @@
 [Desktop Entry]
 Name=Stop Console
-Exec=/home/pi/TARDIS-Pi/console_stop.sh
+Exec=~/TARDIS-Pi/console_stop.sh
 Icon=xfce-man
 Type=Application
 Categories=GTK;Utility;TerminalEmulator;
 StartupNotify=true
 Terminal=true
 X-KeepTerminal=false
-Path=/home/pi/TARDIS-Pi/
+Path=~/TARDIS-Pi/

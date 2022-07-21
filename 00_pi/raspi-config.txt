@@ -28,18 +28,18 @@ sed -e 's/$//' -e 's/^\s*/\/usr\/bin\/raspi-config nonint /' | bash -x -
 
 # Hardware Configuration
 do_ssh 0                  # Enable remote ssh login
-do_vnc 0
-do_boot_splash 1          # Disable the splash screen
-do_boot_behaviour B4      # Boot to CLI & require login
-do_audio 1                # Auto select audio output device
+do_vnc 0                  # Enable VNC
+#do_boot_splash 1         # Disable the splash screen
+#do_boot_behaviour B4      # Boot to Graphical & auto login as pi user
+do_audio 1                # Force audio output through 3.5mm analogue jack
 
 # System Configuration
-do_configure_keyboard                        # Autodetect keyboard
+#do_configure_keyboard us                     # Specify US Keyboard
 do_hostname ${HNAME}                         # Set hostname
-do_wifi_country US                           # Set wifi country
-do_wifi_ssid_passphrase ${WNAME} ${WPWD}     # Set wlan0 network to join 'wifi_name' network using 'password'
-do_change_timezone America/New_York          # Change timezone
-do_change_locale en_US.UTF-8                 # Set language
+#do_wifi_country US                           # Set wifi country
+#do_wifi_ssid_passphrase ${WNAME} ${WPWD}     # Set wlan0 network to join 'wifi_name' network using 'password'
+#do_change_timezone America/New_York          # Change timezone
+#do_change_locale en_US.UTF-8                 # Set language
 
 #Don't add any raspi-config configuration options after 'END' line below & don't remove 'END' line
 END
@@ -54,8 +54,8 @@ END
 #/usr/bin/aptitude upgrade                     # Upgrade installed software to the latest versions
 
 # Interactively set password for your login
-echo "\n\nEnter pi password"
-passwd pi
+#echo "\n\nEnter pi password"
+#passwd pi
 
 #Setup VNC
 sh -c "echo \"Authentication=VncAuth\" > /root/.vnc/config.d/vncserver-x11"
