@@ -1,15 +1,19 @@
 #!/usr/bin/python3
 #
-# TARDIS SFX Calibration Tool.
+# TARDIS SFX Calibration Tool GUI.
 #
-# Copyright (C) 2017-2020 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
 # Last modified 10-23-2020
 #
 
+#
+# FIXME: Unify with console.py having a shared module.
+#
 
-__version__ = '4.1.1'
+
+__version__ = '4.1.6'
 
 import colorsys
 import curses
@@ -54,10 +58,9 @@ def rgb_to_hex(rgb) -> str:
 #
 # Main Loop.
 #
-def mainLoop(stdscr, appgui):
-    # FIXME: def mainLoop(stdscr: curses.window, appgui: App):
-    # rgbBox: Drawing
-    # rgbRect: Drawing
+def mainLoop(stdscr: curses.window, appgui: App):
+    rgbBox: Drawing
+    rgbRect: Drawing
 
     # Setup Curses TUI
     curses.resizeterm(30, 80)
@@ -227,7 +230,6 @@ def mainLoop(stdscr, appgui):
     console.endPWM()
     appgui.tk.destroy()
     # endWhile
-
 
 # End mainLoop
 

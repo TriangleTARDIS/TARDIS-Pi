@@ -103,12 +103,13 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# TARDIS files
 bpytop.py
-
 chroma.py
-
 chroma2.py
-
 testu2.py
-
 testurwid.py
+/00_junk/
+/log/*.log
+/helper/z*.txt
+/00_pi/obi/PI_*.xml

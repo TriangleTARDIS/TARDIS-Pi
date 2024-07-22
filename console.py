@@ -2,14 +2,15 @@
 #
 # TARDIS SFX module.
 #
-# Copyright (C) 2017-2021 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 07-01-2021
+# Last modified 07-30-2022
+# Last modified 07-XX-2023
 #
 
 
-__version__ = '4.1.3'
+__version__ = '4.1.6'
 
 import curses
 import json
@@ -27,30 +28,22 @@ import evdev
 import munch
 import pigpio
 import simpleaudio
+import subprocess
 
 # Globals
-# cfg = None
-# autoPilot:bool = False
-# pwmSleepDefault:float = None
-# piGPIO: pigpio = None
-# gp: evdev.InputDevice = None
-# winStatus: curses.window = None
-# winStatus2: curses.window = None
-# winConsole: curses.window = None
-# log: logging.Logger = None
 cfg = None
-autoPilot = False
-autoFreq = None
-pwmSleepDefault = None
-piGPIO = None
-gp = None
-winStatus = None
-winStatus2 = None
-winConsole = None
-log = None
-pinNames = None
-levelIn = None
-levelOut = None
+autoPilot: bool = False
+autoFreq: int = None
+pwmSleepDefault: float = None
+piGPIO: pigpio = None
+gp: evdev.InputDevice = None
+winStatus: curses.window = None
+winStatus2: curses.window = None
+winConsole: curses.window = None
+log: logging.Logger = None
+pinNames: list[str] = None
+levelIn: list[int] = None
+levelOut: list[int] = None
 
 
 #
@@ -60,6 +53,7 @@ def conPrint(s):
     log.info(s)
 
     if winConsole is not None:
+        winConsole.bkgd(' ', curses.color_pair(3))
         winConsole.addstr(' ' + s + '\n')
         winConsole.box()
         winConsole.noutrefresh()
@@ -97,17 +91,19 @@ def statusPrint(line, s, win=0):
 #
 def refreshWinStatus():
     winStatus.clear()
-    winStatus.addstr(1, 1, 'Autonomous: {} '.format(autoPilot))
-    winStatus.addstr(2, 1, 'Coordinate: {} '.format(list(levelIn.values())))
+    statusPrint(1, 'Autonomous: {} '.format(autoPilot))
+    statusPrint(2, 'Coordinate: {} '.format(list(levelIn.values())))
     winStatus.box()
-    winStatus.addstr(0, 1, 'TT40 Console', curses.color_pair(1))
+    winStatus.addstr(0, 1, 'TT40 Console', curses.color_pair(2))
     winStatus.refresh()
 
     winStatus2.clear()
-    winStatus2.addstr(1, 1, 'Load : {}'.format(os.getloadavg()))
-    winStatus2.addstr(2, 1, 'Gamma: {:1.2f}'.format(cfg.gamma))
     txt = Path('/sys/class/thermal/thermal_zone0/temp').read_text()
-    winStatus2.addstr(3, 1, 'Temp : {:3.1f} F'.format(((float(txt) / 1000) * 9 / 5) + 32))
+    vctxt = subprocess.run(['vcgencmd', 'get_throttled'], stdout=subprocess.PIPE).stdout.decode('utf-8').replace('throttled=', '')
+    statusPrint(1, 'Load : {}'.format(os.getloadavg()), 1)
+    statusPrint(2, 'Gamma: {:1.2f}'.format(cfg.gamma), 1)
+    statusPrint(3, 'Temp : {:3.1f} F'.format(((float(txt) / 1000) * 9 / 5) + 32), 1)
+    statusPrint(4, 'Stat : {}'.format(vctxt), 1)
     winStatus2.box()
     winStatus2.addstr(0, 1, 'Sensors', curses.color_pair(1))
     winStatus2.refresh()
@@ -338,9 +334,9 @@ def effectPulseRGB(sound, name='sinebow'):
 
     while play.is_playing():
         (levelIn['R'], levelIn['G'], levelIn['B']) = colorPattern(effect, i)
-        statusPrint(4, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}]'.format(spin(i, 1), i, **levelIn))
+        statusPrint(4, 'LevelI: {} {:3g} - [{R:3g}, {G:3g}, {B:3g}]'.format(spin(i, 1), i, **levelIn))
         setPwmRgbw(levelIn)
-        statusPrint(5, 'Level: {} {:6g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelOut))
+        statusPrint(5, 'LevelO: {} {:3g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelOut))
 
         time.sleep(pwmSleep)
         i = i + 1
@@ -407,16 +403,19 @@ def sig_handler(signal, frame):
 #
 # Main Loop.
 #
-def mainLoop(stdscr):
-    # FIXME: def mainLoop(stdscr: curses.window):
+def mainLoop(stdscr: curses.window):
     global gp
     global winConsole
     global winStatus
     global winStatus2
 
     # Setup Curses TUI
+    curses.start_color()
+    curses.use_default_colors()
     curses.resizeterm(30, 80)
-    curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_WHITE)
+    curses.init_pair(1, 21, 0)
+    curses.init_pair(2, 21, 0)
+    curses.init_pair(3, 0, 246)
 
     stdscr.nodelay(True)
     # for l in range(0, 29):
@@ -479,7 +478,7 @@ def mainLoop(stdscr):
 
         while vworp:
             time.sleep(cfg.loopSleep)
-            statusPrint(4, 'Frame: {} {} <{}>'.format(spin(r), r, rf if autoPilot else ''), 1)
+            statusPrint(5, 'Frame: {} {} <{}>'.format(spin(r), r, rf if autoPilot else ''), 1)
             ranEvent = False
             event = gp.read_one() if gp is not None else None
             curseKey = stdscr.getch()
@@ -487,7 +486,7 @@ def mainLoop(stdscr):
             # Autopilot Injects Events periodically
             if autoPilot and (r >= rf):
                 r = 0
-                rf = (random.randint(10, 60)) * math.trunc(1 / cfg.loopSleep)
+                rf = (random.randint(cfg.loopRandMin, cfg.loopRandMax)) * math.trunc(1 / cfg.loopSleep)
                 event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
 
             # Handle Event
@@ -497,7 +496,7 @@ def mainLoop(stdscr):
 
                 if autoPilot and r == 0:
                     conPrint('Autonomous action')
-                    kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN', 'u', 'i'])
+                    kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN', 'u', 'i', 'r'])
                 else:
                     conPrint('Normal action')
 
@@ -522,10 +521,10 @@ def mainLoop(stdscr):
                     effectPulse('takeoff.wav', pwmSleepDefault * 2)
                     ranEvent = True
                 elif kCode == 'BTN_MIDDLE' or kCode == 'e':
-                    effectBlink('lock_chirp.wav')
+                    effectPulse('exterior_telephone.wav', pwmSleepDefault)
                     ranEvent = True
                 elif kCode == 'BTN_RIGHT' or kCode == 'r':
-                    effectPulse('exterior_telephone.wav', pwmSleepDefault)
+                    effectBlink('lock_chirp.wav')
                     ranEvent = True
                 elif kCode == 'UP' or kCode == 't':
                     effectPulseRGB('cloister_bell.wav', 'random')
@@ -562,7 +561,6 @@ def mainLoop(stdscr):
             r %= 4000
         # endWhile
 
-
 # End mainLoop
 
 
@@ -594,6 +592,23 @@ def readConfig():
 
 
 #
+# Set XTerm Title Bar Message.
+#
+def setXtermTitle(title):
+    print('\33]0;' + title + '\a', end='', flush=True)
+
+
+#
+# Configure Logging.
+#
+def configLog():
+    global log
+
+    logging.config.fileConfig('logging.ini')
+    log = logging.getLogger()
+
+
+#
 # Init.
 #
 if __name__ == '__main__':
@@ -601,14 +616,13 @@ if __name__ == '__main__':
         stopMode = False
 
         # Set XTerm Title
-        print('\33]0;TT40_Console\a', end='', flush=True)
+        setXtermTitle('TT40 Console - Initializing...')
 
         # Handle Break
         signal.signal(signal.SIGINT, sig_handler)
 
         # Config Logging
-        logging.config.fileConfig('logging.ini')
-        log = logging.getLogger()
+        configLog()
         log.info('Event Zero.')
 
         # Read General Config
@@ -620,11 +634,13 @@ if __name__ == '__main__':
 
         if stopMode:
             # Kill the lights
+            setXtermTitle(f'TT40 Console - Stop Mode')
             initGPIO()
             fullBright(1)
             log.info('Stop Mode')
         else:
             # Start TUI Loop
+            setXtermTitle(f'TT40 Console - Auto: {autoPilot}')
             curses.wrapper(mainLoop)
             shutdown()
 

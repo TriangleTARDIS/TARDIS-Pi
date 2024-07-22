@@ -1,11 +1,20 @@
 #!/bin/bash
-now=`date +"%Y%m%d%k%M"`
-echo "$now"
+#
+# TARDIS SFX module.  Backup Script.
+#
+# Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
+#
+# Created 06-22-2017 by Michael Thompson (triangletardis@gmail.com)
+# Last modified 07-20-2024
+#
+# Version 4.1.6
+#
+
+
+now=`date +"%Y%m%d%k%M" | sed "s/ /0/g"`
+fn=TARDIS-Pi_Backup_$now.tgz
+echo "Backup to $fn ..."
 cd ..
-tar cvf TARDIS-Pi_Backup.tar TARDIS-Pi/
-
-sudo mkdir /mnt/sda1
-sudo mount /dev/sda1 /mnt/sda1
-mount | grep sda
-sudo cp -v TARDIS-Pi_Backup.tar "/mnt/sda1/TARDIS-Pi_Backup_$now.tar"
-
+tar --exclude=.git --exclude=00_junk -zcf $fn TARDIS-Pi/
+echo
+echo "Copy $fn to external storage."

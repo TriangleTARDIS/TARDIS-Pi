@@ -1,6 +1,6 @@
 {
   "__description__": "TARDIS-Pi Config File",
-  "__version__": "4.1.3",
+  "__version__": "4.1.6",
   "debug": false,
   "hostName": "tardispi",
   "autoPilot": false,
@@ -13,6 +13,8 @@
     "◴◷◶◵◐◓◑◒"
   ],
   "loopSleep": 0.1,
+  "loopRandMin": 30,
+  "loopRandMax": 90,
   "pwm": {"Hz": 1200, "step": 255},
   "fadeStep": 60,
   "bcmPin": {"R": 6, "G": 5, "B": 13, "W": 19},
