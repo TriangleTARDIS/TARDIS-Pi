@@ -29,11 +29,15 @@ TODO
 * Better key mapping/joystick support?
 * Fix focus in calibration GUI
 * Integration with IP Phone (effects on incomning call, etc.)
+* Make Console modular and unify with Calibration GUI
+* VT Terminal Setup
+* Safe shutdown/reset buttons on GPIO
 
 
 Useful Links
 ---
 * https://github.com/arpitjindal97/raspbian-recipes/blob/master/wifi-to-eth-route.sh
 * https://github.com/kgbplus/gpiotest
+* https://github.com/alwye/get_throttled/blob/master/get_throttled.sh
 
 ![Console](image/tardis_console.jpg)
