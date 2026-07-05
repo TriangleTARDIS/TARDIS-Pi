@@ -2,11 +2,20 @@
 echo "Git Clone..."
 git clone https://github.com/TriangleTARDIS/TARDIS-Pi.git ~/TARDIS-Pi/
 
+
 echo "Python Update..."
 pip3 install -r ~/TARDIS-Pi/requirements.txt
 
+
 echo "RASPI Config..."
 sudo env HNAME=tardispi sh ~/TARDIS-Pi/00_pi/raspi-config.txt
+
+
+echo "Setup Serial TTY..."
+sudo cp issue /etc/
+sudo cp motd /etc/
+sudo systemctl enable --now serial-getty@ttyUSB0.service
+
 
 echo "Desktop Config..."
 cp -rv ~/TARDIS-Pi/00_pi/home/. ~/
