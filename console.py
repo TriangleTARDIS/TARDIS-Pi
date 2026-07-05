@@ -5,12 +5,11 @@
 # Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 07-30-2022
-# Last modified 07-XX-2023
+# Last modified 07-26-2024
 #
 
 
-__version__ = '4.1.6'
+__version__ = '4.1.7'
 
 import curses
 import json
@@ -53,7 +52,11 @@ def conPrint(s):
     log.info(s)
 
     if winConsole is not None:
-        winConsole.bkgd(' ', curses.color_pair(3))
+        if curses.has_colors():
+            winConsole.bkgd(' ', curses.color_pair(3))
+        else:
+            winConsole.bkgd(' ', curses.A_REVERSE)
+
         winConsole.addstr(' ' + s + '\n')
         winConsole.box()
         winConsole.noutrefresh()
@@ -94,18 +97,24 @@ def refreshWinStatus():
     statusPrint(1, 'Autonomous: {} '.format(autoPilot))
     statusPrint(2, 'Coordinate: {} '.format(list(levelIn.values())))
     winStatus.box()
-    winStatus.addstr(0, 1, 'TT40 Console', curses.color_pair(2))
+    if (curses.has_colors()):
+        winStatus.addstr(0, 1, 'TT40 Console', curses.color_pair(2))
+    else:
+        winStatus.addstr(0, 1, 'TT40 Console', curses.A_REVERSE)
     winStatus.refresh()
 
     winStatus2.clear()
     txt = Path('/sys/class/thermal/thermal_zone0/temp').read_text()
     vctxt = subprocess.run(['vcgencmd', 'get_throttled'], stdout=subprocess.PIPE).stdout.decode('utf-8').replace('throttled=', '')
-    statusPrint(1, 'Load : {}'.format(os.getloadavg()), 1)
-    statusPrint(2, 'Gamma: {:1.2f}'.format(cfg.gamma), 1)
-    statusPrint(3, 'Temp : {:3.1f} F'.format(((float(txt) / 1000) * 9 / 5) + 32), 1)
-    statusPrint(4, 'Stat : {}'.format(vctxt), 1)
+    statusPrint(1, 'Load  : {}'.format(os.getloadavg()), 1)
+    statusPrint(2, 'Gamma : {:1.2f}'.format(cfg.gamma), 1)
+    statusPrint(3, 'Temp  : {:3.1f} F'.format(((float(txt) / 1000) * 9 / 5) + 32), 1)
+    statusPrint(4, 'Status: {}'.format(vctxt), 1)
     winStatus2.box()
-    winStatus2.addstr(0, 1, 'Sensors', curses.color_pair(1))
+    if (curses.has_colors()):
+       winStatus2.addstr(0, 1, 'Sensors', curses.color_pair(1))
+    else:
+       winStatus2.addstr(0, 1, 'Sensors', curses.A_BOLD)
     winStatus2.refresh()
 
 
@@ -114,6 +123,8 @@ def refreshWinStatus():
 # https://stackoverflow.com/questions/2685435/cooler-ascii-spinners
 #
 def spin(t, display=0) -> str:
+    if not curses.has_colors():
+       display = display + 2
     return cfg.spin[display][t % len(cfg.spin[display])]
 
 
@@ -409,17 +420,18 @@ def mainLoop(stdscr: curses.window):
     global winStatus
     global winStatus2
 
+
     # Setup Curses TUI
-    curses.start_color()
-    curses.use_default_colors()
     curses.resizeterm(30, 80)
-    curses.init_pair(1, 21, 0)
-    curses.init_pair(2, 21, 0)
-    curses.init_pair(3, 0, 246)
+
+    if (curses.has_colors()):
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, 21, 0)
+        curses.init_pair(2, 21, 0)
+        curses.init_pair(3, 0, 246)
 
     stdscr.nodelay(True)
-    # for l in range(0, 29):
-    #    stdscr.addstr(l, 0, str(l).rjust(80, '*'))
     stdscr.refresh()
 
     winStatus = curses.newwin(7, 40, 0, 0)

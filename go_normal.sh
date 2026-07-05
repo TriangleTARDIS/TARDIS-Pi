@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # TARDIS SFX module.  TUI - Normal Mode.
 #
@@ -13,5 +13,10 @@
 
 cd "$(dirname "$0")"
 ./console_init.sh
-lxterminal --geometry=80x30 -e "./console.py"
+if [ -v DISPLAY ];then
+   echo "Spawning XTerm..."
+   lxterminal --geometry=80x30 -e "./console.py"
+else
+   ./console.py
+fi
 sleep 2

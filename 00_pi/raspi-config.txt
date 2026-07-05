@@ -63,5 +63,5 @@ echo "\n\nEnter vnc password"
 vncpasswd -service
 
 #Install extras
-apt-get install xscreensaver dnsmasq
+apt-get install xscreensaver dnsmasq minicom
 #apt-get install ffmpeg audacity youtube-dl python-dev

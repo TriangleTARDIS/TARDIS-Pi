@@ -5,9 +5,9 @@
 # Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson (triangletardis@gmail.com)
-# Last modified 07-20-2024
+# Last modified 07-25-2024
 #
-# Version 4.1.6
+# Version 4.1.7
 #
 
 
@@ -15,6 +15,9 @@ cd "$(dirname "$0")"
 clear
 cat asset/tardis_ascii_small.txt
 echo ">>> TT Type 40, Mark 3 <<<"
+
+# Kill any existing consoles
+killall console.py 2> /dev/null
 
 # Output to Headphone, Adjust Mixer, Max volume
 #amixer -q cset numid=3
