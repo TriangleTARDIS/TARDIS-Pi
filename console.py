@@ -2,7 +2,7 @@
 #
 # TARDIS SFX module.
 #
-# Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2026 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
 # Last modified 07-26-2024
@@ -19,6 +19,7 @@ import os
 import random
 import signal
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +30,10 @@ import pigpio
 import simpleaudio
 import subprocess
 
+# Consts
+XTERM_COLOR_BLUE1 = 21
+XTERM_COLOR_GREY58 = 246
+
 # Globals
 cfg = None
 autoPilot: bool = False
@@ -36,6 +41,9 @@ autoFreq: int = None
 pwmSleepDefault: float = None
 piGPIO: pigpio = None
 gp: evdev.InputDevice = None
+colorHeaderInfo: int = None
+colorHeaderSensor: int = None
+colorConsole: int = None
 winStatus: curses.window = None
 winStatus2: curses.window = None
 winConsole: curses.window = None
@@ -43,6 +51,8 @@ log: logging.Logger = None
 pinNames: list[str] = None
 levelIn: list[int] = None
 levelOut: list[int] = None
+bgSoundThread: threading.Thread = None
+bgSoundEnd: threading.Event = None
 
 
 #
@@ -52,11 +62,7 @@ def conPrint(s):
     log.info(s)
 
     if winConsole is not None:
-        if curses.has_colors():
-            winConsole.bkgd(' ', curses.color_pair(3))
-        else:
-            winConsole.bkgd(' ', curses.A_REVERSE)
-
+        winConsole.bkgd(' ', colorConsole)
         winConsole.addstr(' ' + s + '\n')
         winConsole.box()
         winConsole.noutrefresh()
@@ -97,10 +103,7 @@ def refreshWinStatus():
     statusPrint(1, 'Autonomous: {} '.format(autoPilot))
     statusPrint(2, 'Coordinate: {} '.format(list(levelIn.values())))
     winStatus.box()
-    if (curses.has_colors()):
-        winStatus.addstr(0, 1, 'TT40 Console', curses.color_pair(2))
-    else:
-        winStatus.addstr(0, 1, 'TT40 Console', curses.A_REVERSE)
+    winStatus.addstr(0, 1, 'TT40 Console', colorHeaderInfo)
     winStatus.refresh()
 
     winStatus2.clear()
@@ -111,10 +114,7 @@ def refreshWinStatus():
     statusPrint(3, 'Temp  : {:3.1f} F'.format(((float(txt) / 1000) * 9 / 5) + 32), 1)
     statusPrint(4, 'Status: {}'.format(vctxt), 1)
     winStatus2.box()
-    if (curses.has_colors()):
-       winStatus2.addstr(0, 1, 'Sensors', curses.color_pair(1))
-    else:
-       winStatus2.addstr(0, 1, 'Sensors', curses.A_BOLD)
+    winStatus2.addstr(0, 1, 'Sensors', colorHeaderSensor)
     winStatus2.refresh()
 
 
@@ -129,12 +129,56 @@ def spin(t, display=0) -> str:
 
 
 #
-# Play a wave file.
+# Play a wave file with optional blocking.
 #
-# FIXME: Implement blocking.
+def playSound(f, blocking: bool = False) -> simpleaudio.PlayObject:
+    play = simpleaudio.WaveObject.from_wave_file(cfg.dirSound + f).play()
+
+    if blocking:
+        play.wait_done()
+
+    return play
+
+
 #
-def playSound(f) -> simpleaudio.PlayObject:
-    return simpleaudio.WaveObject.from_wave_file(cfg.dirSound + f).play()
+# Begin Background Ambient Sound.
+#
+def initBgSound():
+    global bgSoundThread
+    global bgSoundEnd
+
+
+    bgSoundEnd = threading.Event()
+    bgSoundThread = threading.Thread(target=_bgSoundLoop, daemon=True)
+    bgSoundThread.start()
+
+
+#
+# End Background Ambient Sound.
+#
+def endBgSound():
+    global bgSoundThread
+
+
+    if bgSoundEnd is not None:
+        bgSoundEnd.set()
+
+    if bgSoundThread is not None:
+        bgSoundThread.join()
+        bgSoundThread = None
+
+
+#
+# Background Ambient Sound Thread Loop.
+#
+def _bgSoundLoop():
+    while not bgSoundEnd.is_set():
+        play = simpleaudio.WaveObject.from_wave_file(cfg.dirSound + cfg.bgSound).play()
+
+        while play.is_playing():
+            if bgSoundEnd.is_set():
+                break
+            time.sleep(0.05)
 
 
 #
@@ -334,7 +378,7 @@ def colorPattern(effect, i):
 # Pulse Lights RGB effect.
 #
 def effectPulseRGB(sound, name='sinebow'):
-    conPrint('PulseRGB: {} - {}'.format(name, sound))
+    conPrint('Effect - PulseRGB: {} - {}'.format(name, sound))
     play = playSound(sound)
     beginPWM()
 
@@ -359,9 +403,9 @@ def effectPulseRGB(sound, name='sinebow'):
 #
 # Blink Lights / Door Lock effect.
 #
-def effectBlink(f):
-    conPrint('Lock: ' + f)
-    playSound(f)
+def effectBlink(sound):
+    conPrint('Effect - Blink: ' + sound)
+    playSound(sound)
     beginPWM()
 
     for lvl in [1, 0, 0.25, 1, 0, 0.25, 1]:
@@ -384,6 +428,13 @@ def shutdown():
     global piGPIO
     global gp
 
+
+    try:
+       log.debug('Shutdown Background Sound')
+       endBgSound()
+    except:
+        pass
+
     try:
         log.debug('Shutdown Curses')
         curses.endwin()
@@ -404,10 +455,10 @@ def shutdown():
 
 
 #
-# Signal Handler.
+# Signal Handler, exit on any signal.
 #
 def sig_handler(signal, frame):
-    shutdown()
+    log.critical(f'Signal: {signal} - {frame}')
     sys.exit(1)
 
 
@@ -415,6 +466,9 @@ def sig_handler(signal, frame):
 # Main Loop.
 #
 def mainLoop(stdscr: curses.window):
+    global colorHeaderInfo
+    global colorHeaderSensor
+    global colorConsole
     global gp
     global winConsole
     global winStatus
@@ -422,14 +476,31 @@ def mainLoop(stdscr: curses.window):
 
 
     # Setup Curses TUI
+    log.debug(f'Console: {curses.termname()} - Colors: {curses.COLORS} - ChangeColor: {curses.can_change_color()}')
     curses.resizeterm(30, 80)
 
+    # Mono 
+    colorHeaderInfo = curses.A_REVERSE
+    colorHeaderSensor = curses.A_BOLD
+    colorConsole = curses.A_REVERSE
+    
     if (curses.has_colors()):
         curses.start_color()
         curses.use_default_colors()
-        curses.init_pair(1, 21, 0)
-        curses.init_pair(2, 21, 0)
-        curses.init_pair(3, 0, 246)
+
+        if (curses.COLORS == 8):
+            # XTerm ANSI
+            curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_BLACK)
+            curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+        elif (curses.COLORS > 255):
+            # XTerm 256 (probably...)
+            curses.init_pair(1, XTERM_COLOR_BLUE1, curses.COLOR_BLACK)
+            curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+            curses.init_pair(3, curses.COLOR_BLACK, XTERM_COLOR_GREY58)
+            colorConsole = curses.color_pair(3)
+
+        colorHeaderInfo = curses.color_pair(1) | curses.A_BOLD
+        colorHeaderSensor = curses.color_pair(2)
 
     stdscr.nodelay(True)
     stdscr.refresh()
@@ -453,14 +524,14 @@ def mainLoop(stdscr: curses.window):
     #        next_line = proc.stdout.readline()
     conPrint('***** Console Enabled *****')
 
-    # Init GPIO
+    # Init GPIO/Sound
     initGPIO()
     fullBright()
-    refreshWinStatus()
+    initBgSound()
 
     # Find Input Device
     conPrint('Locate Registered Operator')
-    # FIXME: playSound('runaway_scanning.wav', 5, True)
+    #playSound('runaway_scanning_short.wav', True)
     devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
 
     for device in devices:
