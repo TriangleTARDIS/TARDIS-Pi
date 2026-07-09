@@ -1,0 +1,38 @@
+{
+    // Source - https://stackoverflow.com/a/75189721
+    // Posted by kyrlon, modified by community. See post 'Timeline' for change history
+    // Retrieved 2026-07-05, License - CC BY-SA 4.0
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Python Env",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "linux": {
+                "command": "python3 -m venv py_venv && source py_venv/bin/activate && python3 -m pip install --upgrade pip && python3 -m pip install -r requirements.txt && deactivate py_venv"
+            },
+            "osx": {
+                "command": "python3 -m venv py_venv && source py_venv/bin/activate && python3 -m pip install --upgrade pip && python3 -m pip install -r requirements.txt && deactivate py_venv"
+            },
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "C:\\Windows\\system32\\cmd.exe",
+                        "args": [
+                            "/d",
+                            "/c"
+                        ]
+                    },
+                },
+                "command": "(if not exist py_venv py -m venv py_venv) && .\\py_venv\\Scripts\\activate.bat && py -m pip install --upgrade pip && py -m pip install -r requirements.txt && deactivate py_venv"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

@@ -7,31 +7,25 @@ See http://triangletardis.net for photos and videos.
 Pi Setup
 ---
 * 00_pi/00install.txt
+* 00_pi/00install.sh
 
 
 Config
 ---
-* console_config.json
 * logging.ini
+* console_config.json
 
 
 IP Phone
 ---
-If you want a working phone scripts are included to setup an OBIHAI or other device using the Pi as an ethernet gateway.
+If you want a working phone, scripts are included to setup an OBIHAI or other device using the Pi as an ethernet gateway.
 
-* 00_pi/wifi-to-eth-route.sh
-* 00_pi/iptables.rules  
+* 00_pi/masq
 
 
 TODO
 ---
-* Stop a running effect
-* Better key mapping/joystick support?
-* Fix focus in calibration GUI
-* Integration with IP Phone (effects on incomning call, etc.)
-* Make Console modular and unify with Calibration GUI
-* VT Terminal Setup
-* Safe shutdown/reset buttons on GPIO
+* https://github.com/TriangleTARDIS/TARDIS-Pi/issues
 
 
 Useful Links
@@ -39,5 +33,8 @@ Useful Links
 * https://github.com/arpitjindal97/raspbian-recipes/blob/master/wifi-to-eth-route.sh
 * https://github.com/kgbplus/gpiotest
 * https://github.com/alwye/get_throttled/blob/master/get_throttled.sh
+* http://basecase.org/env/on-rainbows
+* https://www.asciiart.eu
+* https://stackoverflow.com/questions/2685435/cooler-ascii-spinners
 
 ![Console](image/tardis_console.jpg)

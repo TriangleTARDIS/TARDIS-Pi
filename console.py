@@ -5,11 +5,11 @@
 # Copyright (C) 2017-2026 Michael Thompson.  All Rights Reserved.
 #
 # Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
-# Last modified 07-26-2024
+# Last modified 07-09-2026
 #
 
 
-__version__ = '4.1.7'
+__version__ = '4.1.8'
 
 import curses
 import json
@@ -23,12 +23,20 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 import evdev
 import munch
 import pigpio
 import simpleaudio
 import subprocess
+
+#Types
+class RGBWLevel(TypedDict, total=True):
+    R: int = 0
+    G: int = 0
+    B: int = 0
+    W: int = 0
 
 # Consts
 XTERM_COLOR_BLUE1 = 21
@@ -37,7 +45,6 @@ XTERM_COLOR_GREY58 = 246
 # Globals
 cfg = None
 autoPilot: bool = False
-autoFreq: int = None
 pwmSleepDefault: float = None
 piGPIO: pigpio = None
 gp: evdev.InputDevice = None
@@ -49,8 +56,8 @@ winStatus2: curses.window = None
 winConsole: curses.window = None
 log: logging.Logger = None
 pinNames: list[str] = None
-levelIn: list[int] = None
-levelOut: list[int] = None
+levelIn: RGBWLevel = None
+levelOut: RGBWLevel = None
 bgSoundThread: threading.Thread = None
 bgSoundEnd: threading.Event = None
 
@@ -101,7 +108,7 @@ def statusPrint(line, s, win=0):
 def refreshWinStatus():
     winStatus.clear()
     statusPrint(1, 'Autonomous: {} '.format(autoPilot))
-    statusPrint(2, 'Coordinate: {} '.format(list(levelIn.values())))
+    statusPrint(2, 'Dest.     : {} '.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
     winStatus.box()
     winStatus.addstr(0, 1, 'TT40 Console', colorHeaderInfo)
     winStatus.refresh()
@@ -173,6 +180,7 @@ def endBgSound():
 #
 def _bgSoundLoop():
     while not bgSoundEnd.is_set():
+        #FIXME: Adjust Volume via cfg.bgSoundVolume
         play = simpleaudio.WaveObject.from_wave_file(cfg.dirSound + cfg.bgSound).play()
 
         while play.is_playing():
@@ -193,81 +201,89 @@ def initGPIO():
 #
 # Reset LEDs to full bright (or dark).
 #
-def fullBright(lvl=0):
-    statusPrint(3, 'Full Bright.')
+def fullBright(lvl=1):
+    statusPrint(3, f'Full Bright: {lvl}')
 
     for n in cfg.bcmPin.keys():
         pin = cfg.bcmPin[n]
 
-        if pin is not None:
-            levelIn[n] = cfg.pwm.step
-            piGPIO.write(pin, lvl)
+        if pin is not None and pin > 0:
+            levelIn[n] = cfg.pwm.step * lvl
+            levelOut[n] = levelIn[n]
+            piGPIO.write(pin, 1 - lvl)
+
+    statusPrint(4, 'Level: [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(**levelIn))
 
 
 #
 # Gamma Shift a level.
 #
-def gammaShift(lvl) -> int:
-    return int(pow(float(lvl) / float(cfg.pwm.step), cfg.gamma) * cfg.pwm.step + 0.5)
+def gammaShift(lvl) -> float:
+    return pow(float(lvl) / float(cfg.pwm.step), cfg.gamma) * cfg.pwm.step
 
 
 #
-# Gamma Shift RGB then apply Color Mix with optional White Mix to product RGBW.
+# Correct Colors to get to LED RGBW values.
+#   Optional - Gamma Correction.
+#   Optional - White Balance - Adjust RGB for calibrated levels due to human eye sensitivity.
+#   Optional - Mix White channel with lowest RGB channel.
+#   Optional - Scale for minimum forward voltage for each LED channel.
+#   Safely clamp each channel to between 0 and pwm.step.
 #
-def colorShift(colors):
-    cgs = {k: gammaShift(v) for (k, v) in colors.items()}
-    cgsM = {k: (cgs[k] * v) for k, v in cfg.mix.items()}
+def colorCorrect(colorOrig:RGBWLevel, adjustGamma: bool = True, adjustWBalance: bool = True, adjustWMix: bool = True, adjustMin: bool = True) -> RGBWLevel:
+    colorCorrected: RGBWLevel = colorOrig.copy()
 
-    # White Mix, gamma shift??
-    # https://blog.athrunen.dev/experimenting-with-efficiently-combining-rgb-and-true-white/
-    if cfg.mix.W > 0:
-        rgb = {k: v for k, v in cgsM.items() if k != 'W'}
-        mink = min(rgb, key=rgb.get)
-        cgsM['W'] = rgb[mink] * cfg.mix.W
-        cgsM[mink] = cgsM[mink] * (1 - cfg.mix.W)
+    for k in colorOrig.keys():
+        if k != 'W':
+            # Gamma
+            if adjustGamma:
+                colorCorrected[k] = gammaShift(colorCorrected[k])
 
-    cgsM = {k: round(min(cfg.pwm.step, max(0, v))) for k, v in cgsM.items()}
-    return cgsM
+            # White Balance - Color Mix
+            if adjustWBalance:
+                colorCorrected[k] = colorCorrected[k] * cfg.mix[k]
 
+    # Mix White
+    if adjustWMix and cfg.mix.W > 0:
+        rgb = {k: v for k, v in colorCorrected.items() if k != 'W'}
+        minrgb = min(rgb, key=rgb.get)
+        colorCorrected['W'] = rgb[minrgb] * cfg.mix.W
+        colorCorrected[minrgb] = colorCorrected[minrgb] * (1 - cfg.mix.W)
 
-#
-# PWM Set Duty Cycle (with optional gamma correction).
-#
-def setPwmDutyCycle(pinName, lvl, adjust=True) -> int:
-    global levelIn
-    global levelOut
+    for k in colorCorrected.keys():
+        # Scale for Minimum Forward Voltage
+        if adjustMin:
+            minl = cfg.min[k]
+            maxl = cfg.pwm.step
+            colorCorrected[k] = minl + ((colorCorrected[k] / maxl) * (maxl - minl))
 
-    pin = cfg.bcmPin[pinName]
-    mixl = cfg.mix[pinName]
-    # FIXME: Scale to min.
-    # minl = cfg.min[pinName]
-    levelIn[pinName] = lvl
+        # Clamp
+        colorCorrected[k] = int(min(cfg.pwm.step, max(0, colorCorrected[k])))
 
-    if pin is not None and pin > 0:
-        lvla = gammaShift(lvl) * mixl if adjust else lvl
-        levelOut[pinName] = round(min(cfg.pwm.step, max(0, lvla)))
-        piGPIO.set_PWM_dutycycle(pin, cfg.pwm.step - levelOut[pinName])
-
-    return levelOut[pinName]
+    return colorCorrected
 
 
 #
-# Set PWM Duty Cycle for RGBW channels (with optional color correction).
+# Set PWM Duty Cycle for RGBW channels (with optional color corrections).
 #
-def setPwmRgbw(colors, adjust=True):
+def setPwmRgbw(colors, adjustGamma: bool = True, adjustWBalance: bool = True, adjustWMix: bool = True, adjustMin: bool = True):
     global levelIn
     global levelOut
 
     levelIn = colors
 
-    if adjust:
-        colors = colorShift(colors)
+    if adjustGamma or adjustWBalance or adjustWMix or adjustMin:
+        levelOut = colorCorrect(levelIn, adjustGamma=adjustGamma, adjustWBalance=adjustWBalance, adjustWMix=adjustWMix, adjustMin=adjustMin)
+    else:
+        levelOut = levelIn
 
     for pinName in cfg.bcmPin.keys():
         pin = cfg.bcmPin[pinName]
-        # FIXME: Scale to min.
-        # minl = cfg.min[pinName]
-        setPwmDutyCycle(pinName, colors[pinName], False)
+
+        if pin is not None and pin > 0:
+            # Set duty cycle (inverted)
+            levelOut[pinName] = levelOut[pinName]
+            piGPIO.set_PWM_dutycycle(pin, cfg.pwm.step - levelOut[pinName])
 
     return levelOut
 
@@ -276,10 +292,11 @@ def setPwmRgbw(colors, adjust=True):
 # Begin PWM.
 #
 def beginPWM():
+    statusPrint(2, '--- Scanning ---')
     statusPrint(3, 'Begin PWM.')
 
     for pin in cfg.bcmPin.values():
-        if pin is not None:
+        if pin is not None and pin > 0:
             piGPIO.set_PWM_frequency(pin, cfg.pwm.Hz)
             piGPIO.set_PWM_range(pin, cfg.pwm.step)
 
@@ -289,79 +306,59 @@ def beginPWM():
 #
 def endPWM():
     statusPrint(3, 'End PWM.')
-
-    for pinName in cfg.bcmPin.keys():
-        setPwmDutyCycle(pinName, cfg.pwm.step)
+    levelIn = {'R': cfg.pwm.step, 'G': cfg.pwm.step, 'B': cfg.pwm.step, 'W': cfg.pwm.step}
+    setPwmRgbw(levelIn)
 
 
 #
 # RGB Sinebow.
 # http://basecase.org/env/on-rainbows
 #
-def sinebow(h):
+def sinebow(h) -> RGBWLevel:
     h += 1 / 2
     h *= -1
     r = math.sin(math.pi * h)
     g = math.sin(math.pi * (h + 1 / 3))
     b = math.sin(math.pi * (h + 2 / 3))
-    return (int(255 * chan ** 2) for chan in (r, g, b))
+    w = 0
+    return {'R': int(255 * r ** 2), 'G': int(255 * g ** 2), 'B': int(255 * b ** 2), 'W': w}
 
 
 #
 # RGB Sequence.
 # http://basecase.org/env/on-rainbows
 #
-def nthcolor(n):
+def nthcolor(n) -> RGBWLevel:
     phi = (1 + 5 ** 0.5) / 2
     return sinebow(n * phi)
 
 
 #
-# Pulse Lights / Dematerialise effect.
+# Convert RGB Hex string to RGBW Tuple.
+# White will always be zero.
 #
-def effectPulse(f, pwmSleep=pwmSleepDefault):
-    conPrint('Pulse: ' + f)
-    beginPWM()
-    play = playSound(f)
-
-    i = 0
-    while play.is_playing():
-        lvla = int(cfg.pwm.step * 0.5 * ((math.cos((i / cfg.pwm.step) * 2 * math.pi)) + 1))
-        statusPrint(4, 'Level: {} {:6g} of {:6g}'.format(spin(i, 1), lvla, cfg.pwm.step))
-
-        for pinName in cfg.bcmPin.keys():
-            setPwmDutyCycle(pinName, lvla)
-
-        time.sleep(pwmSleep)
-        i = i + 1
-
-    endPWM()
-    conPrint('All Stop')
-
-
-#
-# Convert RGB Hex string to RGB Tuple.
-#
-def hexToRGB(h):
-    return tuple(c for c in bytes.fromhex(h[1:]))
+def hexToRGB(h) -> RGBWLevel:
+    r, g, b = tuple(c for c in bytes.fromhex(h[1:]))
+    return {'R': r, 'G': g, 'B': b, 'W': 0}
 
 
 #
 # Return RGB used to color fade from one color to the next in pattern.
 #
-def colorFade(p, i):
+def colorFade(p, i) -> RGBWLevel:
     j = int(i / cfg.fadeStep % len(p))
     s = i % cfg.fadeStep
     c1 = hexToRGB(p[j])
     c2 = hexToRGB(p[(j + 1) % len(p)])
     (r, g, b) = (int((c2[c] - c1[c]) / cfg.fadeStep * s) + c1[c] for c in range(3))
-    return r, g, b
+    w = 0
+    return {'R': r, 'G': g, 'B': b, 'W': w}
 
 
 #
 # Return RGB used for the named effect.
 #
-def colorPattern(effect, i):
+def colorPattern(effect, i) -> RGBWLevel:
     name = effect.pattern
     fade = effect.fade
 
@@ -379,8 +376,8 @@ def colorPattern(effect, i):
 #
 def effectPulseRGB(sound, name='sinebow'):
     conPrint('Effect - PulseRGB: {} - {}'.format(name, sound))
-    play = playSound(sound)
     beginPWM()
+    play = playSound(sound)
 
     effect = cfg.effects[name]
     slow = effect.slow / cfg.fadeStep if effect.fade else effect.slow
@@ -388,9 +385,32 @@ def effectPulseRGB(sound, name='sinebow'):
     i = 0
 
     while play.is_playing():
-        (levelIn['R'], levelIn['G'], levelIn['B']) = colorPattern(effect, i)
-        statusPrint(4, 'LevelI: {} {:3g} - [{R:3g}, {G:3g}, {B:3g}]'.format(spin(i, 1), i, **levelIn))
+        levelIn = colorPattern(effect, i)
+        statusPrint(4, 'LevelI: {} {:3g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelIn))
         setPwmRgbw(levelIn)
+        statusPrint(5, 'LevelO: {} {:3g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelOut))
+
+        time.sleep(pwmSleep)
+        i = i + 1
+
+    endPWM()
+    conPrint('All Stop')
+
+
+#
+# Pulse Lights / Dematerialise effect.
+#
+def effectPulse(f, pwmSleep=pwmSleepDefault):
+    conPrint('Effect - Pulse: ' + f)
+    beginPWM()
+    play = playSound(f)
+
+    i = 0
+    while play.is_playing():
+        lvl = int(cfg.pwm.step * 0.5 * ((math.cos((i / cfg.pwm.step) * 2 * math.pi)) + 1))
+        levelIn = {'R': lvl, 'G': lvl, 'B': lvl, 'W': lvl}
+        statusPrint(4, 'Level : {} {:6g} of {:6g}'.format(spin(i, 1), lvl, cfg.pwm.step))
+        setPwmRgbw(levelIn, adjustWBalance=False, adjustWMix= False)
         statusPrint(5, 'LevelO: {} {:3g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelOut))
 
         time.sleep(pwmSleep)
@@ -405,15 +425,15 @@ def effectPulseRGB(sound, name='sinebow'):
 #
 def effectBlink(sound):
     conPrint('Effect - Blink: ' + sound)
-    playSound(sound)
     beginPWM()
+    playSound(sound)
 
     for lvl in [1, 0, 0.25, 1, 0, 0.25, 1]:
         lvl *= cfg.pwm.step
+        levelIn = {'R': lvl, 'G': lvl, 'B': lvl, 'W': lvl}
         statusPrint(4, 'Level: {:6g} of {:6g}'.format(lvl, cfg.pwm.step))
-
-        for pin in cfg.bcmPin.values():
-            piGPIO.set_PWM_dutycycle(pin, lvl)
+        setPwmRgbw(levelIn, adjustWBalance=False, adjustWMix= False)
+        statusPrint(5, 'LevelO: [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format( **levelOut))
 
         time.sleep(0.1)
 
@@ -463,19 +483,18 @@ def sig_handler(signal, frame):
 
 
 #
-# Main Loop.
+# Setup Curses TUI.
+# Initialize colors and three panes.
 #
-def mainLoop(stdscr: curses.window):
+def initCurses(stdscr: curses.window):
     global colorHeaderInfo
     global colorHeaderSensor
     global colorConsole
-    global gp
     global winConsole
     global winStatus
     global winStatus2
 
 
-    # Setup Curses TUI
     log.debug(f'Console: {curses.termname()} - Colors: {curses.COLORS} - ChangeColor: {curses.can_change_color()}')
     curses.resizeterm(30, 80)
 
@@ -504,6 +523,7 @@ def mainLoop(stdscr: curses.window):
 
     stdscr.nodelay(True)
     stdscr.refresh()
+    stdscr.leaveok(True)
 
     winStatus = curses.newwin(7, 40, 0, 0)
     winStatus2 = curses.newwin(7, 40, 0, 40)
@@ -511,6 +531,23 @@ def mainLoop(stdscr: curses.window):
 
     winConsole = curses.newwin(22, 60, 7, 10)
     winConsole.scrollok(True)
+
+
+#
+# Main Loop.
+#
+def mainLoop(stdscr: curses.window):
+    global colorHeaderInfo
+    global colorHeaderSensor
+    global colorConsole
+    global gp
+    global winConsole
+    global winStatus
+    global winStatus2
+
+
+    # Setup Curses TUI
+    initCurses(stdscr)
 
     # Run System Init
     # FIXME: This hangs on Pi.
@@ -535,7 +572,7 @@ def mainLoop(stdscr: curses.window):
     devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
 
     for device in devices:
-        log.debug('Device: ' + device.name + ' [' + device.path + ']')
+        debugPrint('Device: ' + device.name + ' [' + device.path + ']')
 
         if device.name == cfg.devName:
             gp = evdev.InputDevice(device.path)
@@ -544,105 +581,109 @@ def mainLoop(stdscr: curses.window):
     # if autoPilot and (gp is None):
     #    gp = evdev.InputDevice('/dev/input/event0')
 
-    # Event Loop
     if not autoPilot and (gp is None):
         raise Exception('Operator Missing!')
+
+    if gp is None:
+        conPrint('Operator Missing, Autonomous Control active.')
     else:
-        if gp is None:
-            conPrint('Operator Missing, Autonomous Control active.')
-        else:
-            conPrint('Found Operator! [' + gp.name + ']')
-            gp.grab()
+        conPrint('Found Operator! [' + gp.name + ']')
+        gp.grab()
 
-        r = 0
-        rf = autoFreq
-        vworp = True
-        curses.flushinp()
+    r = 0
+    rf = cfg.loopRandMin
+    vworp = True
+    curses.flushinp()
 
-        while vworp:
-            time.sleep(cfg.loopSleep)
-            statusPrint(5, 'Frame: {} {} <{}>'.format(spin(r), r, rf if autoPilot else ''), 1)
-            ranEvent = False
-            event = gp.read_one() if gp is not None else None
-            curseKey = stdscr.getch()
+    # Event Loop
+    while vworp:
+        time.sleep(cfg.loopSleep)
 
-            # Autopilot Injects Events periodically
-            if autoPilot and (r >= rf):
-                r = 0
-                rf = (random.randint(cfg.loopRandMin, cfg.loopRandMax)) * math.trunc(1 / cfg.loopSleep)
-                event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
+        if (r % 10 == 0):
+            refreshWinStatus()
 
-            # Handle Event
-            if (event is not None and (event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL)) or (
-                    curseKey != curses.ERR):
-                kCode = None
+        statusPrint(5, 'Frame -- {} {} <{}>'.format(spin(r), r, rf if autoPilot else ''), 1)
+        ranEvent = False
+        event = gp.read_one() if gp is not None else None
+        curseKey = stdscr.getch()
 
-                if autoPilot and r == 0:
-                    conPrint('Autonomous action')
-                    kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN', 'u', 'i', 'r'])
+        # Autopilot Injects Events periodically
+        if autoPilot and (r >= rf):
+            r = 0
+            rf = (random.randint(cfg.loopRandMin, cfg.loopRandMax)) * math.trunc(1 / cfg.loopSleep)
+            event = evdev.events.InputEvent(0, 0, evdev.ecodes.EV_KEY, evdev.ecodes.KEY_ESC, 1)
+
+        # Handle Event
+        if (event is not None and (event.type == evdev.ecodes.EV_KEY or event.type == evdev.ecodes.EV_REL)) or (
+                curseKey != curses.ERR):
+            kCode = None
+
+            if autoPilot and r == 0:
+                conPrint('Autonomous action')
+                kCode = random.choice(['UP', 'BTN_MIDDLE', 'BTN_LEFT', 'BTN_RIGHT', 'DOWN', 'u', 'i', 'r'])
+            else:
+                conPrint('Normal action')
+
+                # Handle EVDEV and Curses inputs
+                if event is not None:
+                    keyevent = evdev.categorize(event)
+
+                    # Handle multiple key press and convert mouse wheel axis to single press
+                    if event.type == evdev.ecodes.EV_KEY and keyevent.keystate == evdev.events.KeyEvent.key_down:
+                        kCode = keyevent.keycode[0] if type(keyevent.keycode) is list else keyevent.keycode
+                    elif event.code == evdev.ecodes.REL_WHEEL:
+                        kCode = 'UP' if event.value == 1 else 'DOWN'
                 else:
-                    conPrint('Normal action')
+                    kCode = chr(curseKey)
 
-                    # Handle EVDEV and Curses inputs
-                    if event is not None:
-                        keyevent = evdev.categorize(event)
+            if kCode is not None:
+                r = 0
+                statusPrint(4, 'Key: ' + kCode)
 
-                        # Handle multiple key press and convert mouse wheel axis to single press
-                        if event.type == evdev.ecodes.EV_KEY and keyevent.keystate == evdev.events.KeyEvent.key_down:
-                            kCode = keyevent.keycode[0] if type(keyevent.keycode) is list else keyevent.keycode
-                        elif event.code == evdev.ecodes.REL_WHEEL:
-                            kCode = 'UP' if event.value == 1 else 'DOWN'
-                    else:
-                        kCode = chr(curseKey)
+            # Run Effect
+            if kCode == 'BTN_LEFT' or kCode == 'w':
+                effectPulse('takeoff.wav', pwmSleepDefault * 2)
+                ranEvent = True
+            elif kCode == 'BTN_MIDDLE' or kCode == 'e':
+                effectPulse('exterior_telephone.wav', pwmSleepDefault)
+                ranEvent = True
+            elif kCode == 'BTN_RIGHT' or kCode == 'r':
+                effectBlink('lock_chirp.wav')
+                ranEvent = True
+            elif kCode == 'UP' or kCode == 't':
+                effectPulseRGB('cloister_bell.wav', 'random')
+                ranEvent = True
+            elif kCode == 'DOWN' or kCode == 'y':
+                effectPulseRGB('denied_takeoff.wav')
+                ranEvent = True
+            elif kCode == 'u':
+                # Test Effect
+                effectPulseRGB('mummy.wav', 'mauveAlert')
+                ranEvent = True
+            elif kCode == 'i':
+                # Test Effect
+                effectPulseRGB('runaway_scanning.wav', 'flag')
+                ranEvent = True
+            elif kCode == 'KEY_Q' or kCode == 'q':
+                vworp = False
+            elif kCode is not None:
+                debugPrint('Unused Key: ' + str(kCode))
 
-                if kCode is not None:
-                    r = 0
-                    statusPrint(4, 'Key: ' + kCode)
+            # Empty Input Buffer
+            if ranEvent:
+                refreshWinStatus()
+                curses.flushinp()
+                curses.doupdate()
 
-                # Run Effect
-                if kCode == 'BTN_LEFT' or kCode == 'w':
-                    effectPulse('takeoff.wav', pwmSleepDefault * 2)
-                    ranEvent = True
-                elif kCode == 'BTN_MIDDLE' or kCode == 'e':
-                    effectPulse('exterior_telephone.wav', pwmSleepDefault)
-                    ranEvent = True
-                elif kCode == 'BTN_RIGHT' or kCode == 'r':
-                    effectBlink('lock_chirp.wav')
-                    ranEvent = True
-                elif kCode == 'UP' or kCode == 't':
-                    effectPulseRGB('cloister_bell.wav', 'random')
-                    ranEvent = True
-                elif kCode == 'DOWN' or kCode == 'y':
-                    effectPulseRGB('denied_takeoff.wav')
-                    ranEvent = True
-                elif kCode == 'u':
-                    # Test Effect
-                    effectPulseRGB('mummy.wav', 'mauveAlert')
-                    ranEvent = True
-                elif kCode == 'i':
-                    # Test Effect
-                    effectPulseRGB('runaway_scanning.wav', 'flag')
-                    ranEvent = True
-                elif kCode == 'KEY_Q' or kCode == 'q':
-                    vworp = False
-                elif kCode is not None:
-                    debugPrint('Unused Key: ' + str(kCode))
+                while gp is not None and gp.read_one() is not None:
+                    pass
 
-                # Empty Input Buffer
-                if ranEvent:
-                    refreshWinStatus()
-                    curses.flushinp()
-                    curses.doupdate()
+            fullBright()
+        # endif
 
-                    while gp is not None and gp.read_one() is not None:
-                        pass
-
-                fullBright()
-            # endif
-
-            r += 1
-            r %= 4000
-        # endWhile
+        r += 1
+        r %= 4000
+    # endWhile
 
 # End mainLoop
 
@@ -652,7 +693,6 @@ def mainLoop(stdscr: curses.window):
 #
 def readConfig():
     global cfg
-    global autoFreq
     global pwmSleepDefault
     global pinNames
     global levelIn
@@ -661,7 +701,6 @@ def readConfig():
     with open('console_config.json') as f:
         cfg = munch.munchify(json.load(f))
 
-    autoFreq = cfg.autoFreq
     pwmSleepDefault = 1 / cfg.pwm.step
     pinNames = list(cfg.bcmPin.keys())
     levelIn = dict.fromkeys(cfg.bcmPin.keys())
@@ -719,7 +758,7 @@ if __name__ == '__main__':
             # Kill the lights
             setXtermTitle(f'TT40 Console - Stop Mode')
             initGPIO()
-            fullBright(1)
+            fullBright(0)
             log.info('Stop Mode')
         else:
             # Start TUI Loop
