@@ -496,6 +496,7 @@ def initCurses(stdscr: curses.window):
 
 
     log.debug(f'Console: {curses.termname()} - Colors: {curses.COLORS} - ChangeColor: {curses.can_change_color()}')
+    curses.curs_set(0)
     curses.resizeterm(30, 80)
 
     # Mono 
@@ -698,7 +699,7 @@ def readConfig():
     global levelIn
     global levelOut
 
-    with open('console_config.json') as f:
+    with open('console_config.json', encoding='utf-8') as f:
         cfg = munch.munchify(json.load(f))
 
     pwmSleepDefault = 1 / cfg.pwm.step
