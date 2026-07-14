@@ -19,7 +19,6 @@ import os
 import random
 import signal
 import sys
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -28,8 +27,9 @@ from typing import TypedDict
 import evdev
 import munch
 import pigpio
-import simpleaudio
 import subprocess
+
+from console_sound import SoundManager
 
 #Types
 class RGBWLevel(TypedDict, total=True):
@@ -58,8 +58,7 @@ log: logging.Logger = None
 pinNames: list[str] = None
 levelIn: RGBWLevel = None
 levelOut: RGBWLevel = None
-bgSoundThread: threading.Thread = None
-bgSoundEnd: threading.Event = None
+sound: SoundManager = None
 
 
 #
@@ -103,6 +102,26 @@ def statusPrint(line, s, win=0):
 
 
 #
+# Get CPU Temperature (Pi only).
+#     
+def getTemperature() -> float:
+    try:
+        txt = Path('/sys/class/thermal/thermal_zone0/temp').read_text()
+        return ((float(txt) / 1000) * 9 / 5) + 32
+    except Exception:
+        return 0.0
+
+#
+# Get Throttle Status (Pi only).
+#
+def getThrottleStatus() -> str:
+    try:
+        vctxt = subprocess.run(['vcgencmd', 'get_throttled'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode('utf-8').replace('throttled=', '')
+        return vctxt
+    except Exception:
+        return 'N/A'
+
+#
 # Refresh Status Windows.
 #
 def refreshWinStatus():
@@ -114,12 +133,10 @@ def refreshWinStatus():
     winStatus.refresh()
 
     winStatus2.clear()
-    txt = Path('/sys/class/thermal/thermal_zone0/temp').read_text()
-    vctxt = subprocess.run(['vcgencmd', 'get_throttled'], stdout=subprocess.PIPE).stdout.decode('utf-8').replace('throttled=', '')
     statusPrint(1, 'Load  : {}'.format(os.getloadavg()), 1)
     statusPrint(2, 'Gamma : {:1.2f}'.format(cfg.gamma), 1)
-    statusPrint(3, 'Temp  : {:3.1f} F'.format(((float(txt) / 1000) * 9 / 5) + 32), 1)
-    statusPrint(4, 'Status: {}'.format(vctxt), 1)
+    statusPrint(3, 'Temp  : {:3.1f} F'.format(getTemperature()), 1)
+    statusPrint(4, 'Status: {}'.format(getThrottleStatus()), 1)
     winStatus2.box()
     winStatus2.addstr(0, 1, 'Sensors', colorHeaderSensor)
     winStatus2.refresh()
@@ -133,60 +150,6 @@ def spin(t, display=0) -> str:
     if not curses.has_colors():
        display = display + 2
     return cfg.spin[display][t % len(cfg.spin[display])]
-
-
-#
-# Play a wave file with optional blocking.
-#
-def playSound(f, blocking: bool = False) -> simpleaudio.PlayObject:
-    play = simpleaudio.WaveObject.from_wave_file(cfg.dirSound + f).play()
-
-    if blocking:
-        play.wait_done()
-
-    return play
-
-
-#
-# Begin Background Ambient Sound.
-#
-def initBgSound():
-    global bgSoundThread
-    global bgSoundEnd
-
-
-    bgSoundEnd = threading.Event()
-    bgSoundThread = threading.Thread(target=_bgSoundLoop, daemon=True)
-    bgSoundThread.start()
-
-
-#
-# End Background Ambient Sound.
-#
-def endBgSound():
-    global bgSoundThread
-
-
-    if bgSoundEnd is not None:
-        bgSoundEnd.set()
-
-    if bgSoundThread is not None:
-        bgSoundThread.join()
-        bgSoundThread = None
-
-
-#
-# Background Ambient Sound Thread Loop.
-#
-def _bgSoundLoop():
-    while not bgSoundEnd.is_set():
-        #FIXME: Adjust Volume via cfg.bgSoundVolume
-        play = simpleaudio.WaveObject.from_wave_file(cfg.dirSound + cfg.bgSound).play()
-
-        while play.is_playing():
-            if bgSoundEnd.is_set():
-                break
-            time.sleep(0.05)
 
 
 #
@@ -372,12 +335,23 @@ def colorPattern(effect, i) -> RGBWLevel:
 
 
 #
+# Check Curses for Escape Key press.
+#
+def shouldStopEffect(stdscr=None) -> bool:
+    if stdscr is None:
+        return False
+
+    key = stdscr.getch()
+    return key != curses.ERR and key == 27 
+
+
+#
 # Pulse Lights RGB effect.
 #
-def effectPulseRGB(sound, name='sinebow'):
-    conPrint('Effect - PulseRGB: {} - {}'.format(name, sound))
+def effectPulseRGB(snd, name='sinebow', stdscr=None):
+    conPrint('Effect - PulseRGB: {} - {}'.format(name, snd))
     beginPWM()
-    play = playSound(sound)
+    play = sound.playSound(snd)
 
     effect = cfg.effects[name]
     slow = effect.slow / cfg.fadeStep if effect.fade else effect.slow
@@ -385,6 +359,11 @@ def effectPulseRGB(sound, name='sinebow'):
     i = 0
 
     while play.is_playing():
+        if shouldStopEffect(stdscr):
+            conPrint('>>> Effect stopped!')
+            play.stop()
+            return
+
         levelIn = colorPattern(effect, i)
         statusPrint(4, 'LevelI: {} {:3g} - [{R:3g}, {G:3g}, {B:3g}, {W:3g}]'.format(spin(i, 1), i, **levelIn))
         setPwmRgbw(levelIn)
@@ -400,13 +379,18 @@ def effectPulseRGB(sound, name='sinebow'):
 #
 # Pulse Lights / Dematerialise effect.
 #
-def effectPulse(f, pwmSleep=pwmSleepDefault):
+def effectPulse(f, pwmSleep=pwmSleepDefault, stdscr=None):
     conPrint('Effect - Pulse: ' + f)
     beginPWM()
-    play = playSound(f)
+    play = sound.playSound(f)
 
     i = 0
     while play.is_playing():
+        if shouldStopEffect(stdscr):
+            conPrint('>>> Effect stopped!')
+            play.stop()
+            return
+
         lvl = int(cfg.pwm.step * 0.5 * ((math.cos((i / cfg.pwm.step) * 2 * math.pi)) + 1))
         levelIn = {'R': lvl, 'G': lvl, 'B': lvl, 'W': lvl}
         statusPrint(4, 'Level : {} {:6g} of {:6g}'.format(spin(i, 1), lvl, cfg.pwm.step))
@@ -423,12 +407,17 @@ def effectPulse(f, pwmSleep=pwmSleepDefault):
 #
 # Blink Lights / Door Lock effect.
 #
-def effectBlink(sound):
-    conPrint('Effect - Blink: ' + sound)
+def effectBlink(snd, stdscr=None):
+    conPrint('Effect - Blink: ' + snd)
     beginPWM()
-    playSound(sound)
+    play = sound.playSound(snd)
 
     for lvl in [1, 0, 0.25, 1, 0, 0.25, 1]:
+        if shouldStopEffect(stdscr):
+            conPrint('>>> Effect stopped!')
+            play.stop()
+            return
+
         lvl *= cfg.pwm.step
         levelIn = {'R': lvl, 'G': lvl, 'B': lvl, 'W': lvl}
         statusPrint(4, 'Level: {:6g} of {:6g}'.format(lvl, cfg.pwm.step))
@@ -450,8 +439,9 @@ def shutdown():
 
 
     try:
-       log.debug('Shutdown Background Sound')
-       endBgSound()
+       if sound is not None:
+           log.debug('Shutdown Background Sound')
+           sound.endBgSound()
     except:
         pass
 
@@ -545,6 +535,7 @@ def mainLoop(stdscr: curses.window):
     global winConsole
     global winStatus
     global winStatus2
+    global sound
 
 
     # Setup Curses TUI
@@ -565,11 +556,12 @@ def mainLoop(stdscr: curses.window):
     # Init GPIO/Sound
     initGPIO()
     fullBright()
-    initBgSound()
+    sound = SoundManager(cfg)
+    sound.initBgSound()
 
     # Find Input Device
     conPrint('Locate Registered Operator')
-    #playSound('runaway_scanning_short.wav', True)
+    #sound.playSound('runaway_scanning_short.wav', True)
     devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
 
     for device in devices:
@@ -643,27 +635,27 @@ def mainLoop(stdscr: curses.window):
 
             # Run Effect
             if kCode == 'BTN_LEFT' or kCode == 'w':
-                effectPulse('takeoff.wav', pwmSleepDefault * 2)
+                effectPulse('takeoff.wav', pwmSleepDefault * 2, stdscr)
                 ranEvent = True
             elif kCode == 'BTN_MIDDLE' or kCode == 'e':
-                effectPulse('exterior_telephone.wav', pwmSleepDefault)
+                effectPulse('exterior_telephone.wav', pwmSleepDefault, stdscr)
                 ranEvent = True
             elif kCode == 'BTN_RIGHT' or kCode == 'r':
-                effectBlink('lock_chirp.wav')
+                effectBlink('lock_chirp.wav', stdscr)
                 ranEvent = True
             elif kCode == 'UP' or kCode == 't':
-                effectPulseRGB('cloister_bell.wav', 'random')
+                effectPulseRGB('cloister_bell.wav', 'random', stdscr)
                 ranEvent = True
             elif kCode == 'DOWN' or kCode == 'y':
-                effectPulseRGB('denied_takeoff.wav')
+                effectPulseRGB('denied_takeoff.wav', 'sinebow', stdscr)
                 ranEvent = True
             elif kCode == 'u':
                 # Test Effect
-                effectPulseRGB('mummy.wav', 'mauveAlert')
+                effectPulseRGB('mummy.wav', 'mauveAlert', stdscr)
                 ranEvent = True
             elif kCode == 'i':
                 # Test Effect
-                effectPulseRGB('runaway_scanning.wav', 'flag')
+                effectPulseRGB('runaway_scanning.wav', 'flag', stdscr)
                 ranEvent = True
             elif kCode == 'KEY_Q' or kCode == 'q':
                 vworp = False
