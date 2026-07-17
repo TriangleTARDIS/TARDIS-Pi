@@ -2,12 +2,10 @@
 #
 # TARDIS SFX module.  Sensor Log, Query Historical Temperature Range.
 #
-# Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2026 M Thompson.  All Rights Reserved.
 #
-# Created 06-22-2017 by Michael Thompson (triangletardis@gmail.com)
-# Last modified 07-20-2024
-#
-# Version 4.1.6
+# Created 06-22-2017 by M Thompson (triangletardis@gmail.com)
+# Last modified 07-16-2026
 #
 
 

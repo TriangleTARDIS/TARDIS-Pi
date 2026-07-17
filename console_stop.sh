@@ -1,34 +1,22 @@
-#!/bin/sh
+#!/bin/bash
 #
 # TARDIS SFX module.  Kill Script.
 #
-# Copyright (C) 2017-2024 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2026 M Thompson.  All Rights Reserved.
 #
-# Created 06-22-2017 by Michael Thompson (triangletardis@gmail.com)
-# Last modified 07-20-2024
-#
-# Version 4.1.6
+# Created 06-22-2017 by M Thompson (triangletardis@gmail.com)
+# Last modified 07-16-2026
 #
 
 
 cd "$(dirname "$0")"
-clear
-cat asset/tardis_ascii_small.txt
-echo ">>> TT Type 40, Mark 3 <<<"
+./console_init.sh
 
 # Stop sound
-killall -q speaker-test
 echo Quiet Running...
 
-# Activate gpio daemon
-sudo killall pigpiod > /dev/null
-sudo pigpiod
-sleep 1
-
 # Deactivate Lights
-./console.py stop
-#raspi-gpio set X op
-#raspi-gpio set X dh
+./src/console.py stop
 echo Stealth Mode...
 
 sleep 5

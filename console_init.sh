@@ -1,13 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 #
 # TARDIS SFX module.  Init Script for TUI.
 #
-# Copyright (C) 2017-2026 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2026 M Thompson.  All Rights Reserved.
 #
-# Created 06-22-2017 by Michael Thompson (triangletardis@gmail.com)
-# Last modified 07-25-2024
-#
-# Version 4.1.8
+# Created 06-22-2017 by M Thompson (triangletardis@gmail.com)
+# Last modified 07-16-2026
 #
 
 
@@ -17,6 +15,7 @@ cat asset/tardis_ascii_small.txt
 echo ">>> TT Type 40, Mark 3 <<<"
 
 # Kill any existing consoles
+killall calibrate.py 2> /dev/null
 killall console.py 2> /dev/null
 
 # Output to Headphone, Adjust Mixer, Max volume
@@ -31,9 +30,11 @@ sudo pigpiod
 sleep 1
 
 # Activate Lights
-#raspi-gpio set X op
-#raspi-gpio set X dl
 echo Hostile Action Displacement System Activated...
+
+# Disable Caps Lock
+echo "Disengage the parking brakes..."
+setleds -D -caps
 
 # Finish
 echo Initialization Complete!

@@ -2,31 +2,31 @@
 #
 # TARDIS SFX module.
 #
-# Copyright (C) 2017-2020 Michael Thompson.  All Rights Reserved.
+# Copyright (C) 2017-2020 M Thompson.  All Rights Reserved.
 #
-# Created 06-22-2017 by Michael Thompson(triangletardis@gmail.com)
+# Created 06-22-2017 by M Thompson(triangletardis@gmail.com)
 # Last modified 12-18-2020
 #
 
 
 __version__ = '1.0.0'
 
-import curses
-import json
-import logging.config
-import math
-import os
-import random
-import signal
+#import curses
+#import json
+#import logging.config
+#import math
+#import os
+#import random
+#import signal
 import sys
-import time
-from datetime import datetime
-from pathlib import Path
+#import time
+#from datetime import datetime
+#from pathlib import Path
 
-import evdev
-import munch
-import pigpio
-import simpleaudio
+#import evdev
+#import munch
+#import pigpio
+#import simpleaudio
 
 from pyobihai import PyObihai
 

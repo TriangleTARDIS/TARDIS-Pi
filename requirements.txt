@@ -1,5 +1,6 @@
 guizero~=1.6.0
-munch~=4.0.0
 evdev~=1.9.3
 pigpio~=1.78
-simpleaudio~=1.0.4
+simpleaudio-patched~=1.0.4
+pydantic~=2.13.4
+smbus

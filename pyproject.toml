@@ -1,0 +1,6 @@
+[tool.ruff]
+line-length = 172
+
+[tool.ruff.format]
+quote-style = "single"
+line-ending = "lf"

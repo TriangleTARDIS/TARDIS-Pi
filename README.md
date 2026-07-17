@@ -1,12 +1,12 @@
 # TARDIS-Pi
-Full size TARDIS SFX automation for RPI.  Tested with Pi Model 3B and 3B+.
+Full size TARDIS SFX automation for RPI.  Tested with Pi Model 3B and 3B+.  RPI5 likely not supported.
 
 See http://triangletardis.net for photos and videos.
 
 
 Pi Setup
 ---
-* 00_pi/00install.txt
+* [00_pi/README.md](00_pi/README.md)
 * 00_pi/00install.sh
 
 
@@ -19,6 +19,7 @@ Config
 IP Phone
 ---
 If you want a working phone, scripts are included to setup an OBIHAI or other device using the Pi as an ethernet gateway.
+Alternatively a mini router liek the ones from GL.iNet work great.
 
 * 00_pi/masq
 

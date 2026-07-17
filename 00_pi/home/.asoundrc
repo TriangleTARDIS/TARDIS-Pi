@@ -1,0 +1,2 @@
+defaults.pcm.!card "Device"
+defaults.ctl.!card "Device"
