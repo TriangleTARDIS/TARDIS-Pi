@@ -39,7 +39,13 @@ sudo systemctl restart smbd
 echo "Setup Serial TTY..."
 sudo cp ~/TARDIS-Pi/00_pi/issue /etc/
 sudo cp ~/TARDIS-Pi/00_pi/motd /etc/
-sudo systemctl enable --now ~/TARDIS-Pi/00_pi/serial-getty@ttyUSB0.service
+sudo systemctl enable ~/TARDIS-Pi/00_pi/serial-getty@ttyUSB0.service
+sudo systemctl start serial-getty@ttyUSB0.service
+
+
+echo "Setup Serial TTY..."
+sudo cp ~/TARDIS-Pi/00_pi/home/.asoundrc /etc/asound.conf
+sudo chmod a+r /etc/asound.conf
 
 
 echo "Desktop Config..."
