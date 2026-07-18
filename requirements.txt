@@ -4,3 +4,4 @@ pigpio~=1.78
 simpleaudio-patched~=1.0.4
 pydantic~=2.13.4
 smbus
+adafruit-circuitpython-charlcd

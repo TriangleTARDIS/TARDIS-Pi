@@ -3,8 +3,8 @@ echo "Python Update..."
 pip3 install --break-system-packages --user -r ~/TARDIS-Pi/requirements.txt
 
 
-#echo "RASPI Config..."
-#sudo sh ~/TARDIS-Pi/00_pi/raspi-config.txt
+echo "RASPI Config..."
+sudo sh ~/TARDIS-Pi/00_pi/raspi-config.txt
 
 
 echo "Setup VNC..."
@@ -43,7 +43,7 @@ sudo systemctl enable ~/TARDIS-Pi/00_pi/serial-getty@ttyUSB0.service
 sudo systemctl start serial-getty@ttyUSB0.service
 
 
-echo "Setup Serial TTY..."
+echo "Setup Sound..."
 sudo cp ~/TARDIS-Pi/00_pi/home/.asoundrc /etc/asound.conf
 sudo chmod a+r /etc/asound.conf
 
@@ -53,5 +53,7 @@ cp -rv ~/TARDIS-Pi/00_pi/home/. ~/
 sed -i'' "s/~/\/home\/$USER/" ~/Desktop/TARDIS-*.desktop
 sed -i'' "s/~/\/home\/$USER/" ~/.config/pcmanfm/LXDE-pi/*.conf
 
-killall pcmanfm
-pcmanfm --desktop --profile LXDE-pi --display :0 &
+if [ -v DISPLAY ];then
+   killall pcmanfm
+   pcmanfm --desktop --profile LXDE-pi --display :0 &
+fi

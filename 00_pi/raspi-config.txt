@@ -28,8 +28,8 @@ sed -e 's/$//' -e 's/^\s*/\/usr\/bin\/raspi-config nonint /' | bash -x -
 
 # Hardware Configuration
 #do_ssh 0                 # Enable remote ssh login
-do_vnc 1                  # Enable VNC
-do_i2c 1                  # Enable i2c
+do_vnc 0                  # Enable VNC
+do_i2c 0                  # Enable i2c
 #do_boot_splash 1         # Disable the splash screen
 #do_boot_behaviour B4     # Boot to Graphical & auto login as pi user
 #do_audio 1               # Force audio output through 3.5mm analogue jack

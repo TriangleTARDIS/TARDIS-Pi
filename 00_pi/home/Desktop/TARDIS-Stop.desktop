@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Stop Console
 Exec=~/TARDIS-Pi/console_stop.sh
-Icon=xfce-man
+Icon=help-browser
 Type=Application
 Categories=GTK;Utility;TerminalEmulator;
 StartupNotify=true
